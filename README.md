@@ -30,3 +30,4 @@ which installs the source code plus all dependencies.
 - [ ] Work-precision diagram on the three-body problem
 - [ ] Work-precision diagram on Lotka-Volterra
 - [ ] Train a Neural ODE
+- [ ] Compare fixedpoint forward-pass to filter forward-pass and smoother forward-pass to demonstrate costs
