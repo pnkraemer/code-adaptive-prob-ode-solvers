@@ -7,10 +7,9 @@ name = "odecheckpts"
 version = "0.0.1"
 dependencies = [
     # Ensure that JAX is installed.
-    "probdiffeq",
-    "pytest",
-    "pytest_cases",
-    "pre-commit",
-    "matplotlib",
-    "tqdm",
+    "probdiffeq",   # our code
+    "pre-commit",   # some basic CI
+    "matplotlib",   # plot
+    "tqdm",         # progressbar
+    "diffrax",      # competition
 ]
