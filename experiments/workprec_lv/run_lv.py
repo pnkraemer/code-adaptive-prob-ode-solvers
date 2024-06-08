@@ -67,18 +67,16 @@ def solver_probdiffeq(
     """Construct a solver that wraps ProbDiffEq's solution routines."""
 
     @jax.jit
-    def vf_probdiffeq(y, *, t):  # noqa: ARG001
-        """Lotka--Volterra dynamics."""
-        dy1 = 0.5 * y[0] - 0.05 * y[0] * y[1]
-        dy2 = -0.5 * y[1] + 0.05 * y[0] * y[1]
-        return jnp.asarray([dy1, dy2])
+    def vf_probdiffeq(y, /, *, t, p1=-2.0, p2=1.25, p3=-0.5):
+        r"""Rigid body dynamics without external forces."""
+        return jnp.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
-    u0 = jnp.asarray((20.0, 20.0))
-    t0, t1 = (0.0, 50.0)
+    u0 = jnp.asarray((1.0, 0.0, 0.9))
+    t0, t1 = (0.0, 30.0)
 
     @jax.jit
     def param_to_solution(tol):
-        impl.select(implementation, ode_shape=(2,))
+        impl.select(implementation, ode_shape=(3,))
 
         # Build a solver
         ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
@@ -105,15 +103,13 @@ def solver_probdiffeq(
             adaptive_solver=adaptive_solver,
         )
 
-        # posterior = solution.calibrate(sol.posterior, sol.output_scale)
         markov_seq_posterior = markov.select_terminal(solution.posterior)
         margs_posterior = markov.marginals(markov_seq_posterior, reverse=True)
 
         mean = jnp.concatenate(
             [margs_posterior.mean, solution.posterior.init.mean[[-1], ...]]
         )
-        u = mean[:, 0, :]
-        return u
+        return jax.vmap(impl.hidden_model.qoi_from_sample)(mean)
 
     return lambda t: param_to_solution(t).block_until_ready()
 
@@ -123,14 +119,11 @@ def solver_diffrax(*, solver, save_at) -> Callable:
 
     @diffrax.ODETerm
     @jax.jit
-    def vf_diffrax(_t, y, _args):
-        """Lotka--Volterra dynamics."""
-        dy1 = 0.5 * y[0] - 0.05 * y[0] * y[1]
-        dy2 = -0.5 * y[1] + 0.05 * y[0] * y[1]
-        return jnp.asarray([dy1, dy2])
+    def vf_diffrax(_t, y, _args, p1=-2.0, p2=1.25, p3=-0.5):
+        return jnp.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
-    u0 = jnp.asarray((20.0, 20.0))
-    t0, t1 = (0.0, 50.0)
+    u0 = jnp.asarray((1.0, 0.0, 0.9))
+    t0, t1 = (0.0, 30.0)
 
     @jax.jit
     def param_to_solution(tol):
@@ -155,14 +148,12 @@ def solver_diffrax(*, solver, save_at) -> Callable:
 def solver_scipy(*, method: str, save_at) -> Callable:
     """Construct a solver that wraps SciPy's solution routines."""
 
-    def vf_scipy(_t, y):
-        """Lotka--Volterra dynamics."""
-        dy1 = 0.5 * y[0] - 0.05 * y[0] * y[1]
-        dy2 = -0.5 * y[1] + 0.05 * y[0] * y[1]
-        return np.asarray([dy1, dy2])
+    def vf_scipy(_t, y, *, p1=-2.0, p2=1.25, p3=-0.5):
+        r"""Rigid body dynamics without external forces."""
+        return np.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
-    u0 = jnp.asarray((20.0, 20.0))
-    time_span = np.asarray([0.0, 50.0])
+    u0 = jnp.asarray((1.0, 0.0, 0.9))
+    time_span = np.asarray([0.0, 30.0])
 
     def param_to_solution(tol):
         solution = scipy.integrate.solve_ivp(
@@ -182,14 +173,12 @@ def solver_scipy(*, method: str, save_at) -> Callable:
 def plot_ivp_solution():
     """Compute plotting-values for the IVP."""
 
-    def vf_scipy(_t, y):
-        """Lotka--Volterra dynamics."""
-        dy1 = 0.5 * y[0] - 0.05 * y[0] * y[1]
-        dy2 = -0.5 * y[1] + 0.05 * y[0] * y[1]
-        return np.asarray([dy1, dy2])
+    def vf_scipy(_t, y, *, p1=-2.0, p2=1.25, p3=-0.5):
+        r"""Rigid body dynamics without external forces."""
+        return np.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
-    u0 = jnp.asarray((20.0, 20.0))
-    time_span = np.asarray([0.0, 50.0])
+    u0 = jnp.asarray((1.0, 0.0, 0.9))
+    time_span = np.asarray([0.0, 30.0])
 
     tol = 1e-12
     solution = scipy.integrate.solve_ivp(
@@ -266,15 +255,9 @@ if __name__ == "__main__":
 
     # Assemble algorithms
     ts0, ts1 = corrections.ts0, corrections.ts1
-    ts0_1 = solver_probdiffeq(
-        1, correction=ts0, implementation="isotropic", save_at=xs
-    )
-    ts0_2 = solver_probdiffeq(
-        2, correction=ts0, implementation="isotropic", save_at=xs
-    )
-    ts0_4 = solver_probdiffeq(
-        4, correction=ts0, implementation="isotropic", save_at=xs
-    )
+    ts0_1 = solver_probdiffeq(1, correction=ts0, implementation="isotropic", save_at=xs)
+    ts0_2 = solver_probdiffeq(2, correction=ts0, implementation="isotropic", save_at=xs)
+    ts0_4 = solver_probdiffeq(4, correction=ts0, implementation="isotropic", save_at=xs)
     algorithms = {
         # r"ProbDiffEq: TS0($1$)": ts0_1,
         r"ProbDiffEq: TS0($2$)": ts0_2,

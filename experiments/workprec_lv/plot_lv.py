@@ -38,7 +38,9 @@ def plot_results(axis, results):
         axis.loglog(precision, work_mean, label=label, color=f"C{idx}", **style)
 
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
-        axis.fill_between(precision, range_lower, range_upper, alpha=0.3, color=f"C{idx}", **style)
+        axis.fill_between(
+            precision, range_lower, range_upper, alpha=0.3, color=f"C{idx}", **style
+        )
 
     axis.set_xlabel("Precision [relative RMSE]")
     axis.set_ylabel("Work [wall time, s]")
@@ -52,12 +54,14 @@ def plot_solution(axis, ts, ys, yscale="linear"):
     """Plot the IVP solution."""
     axis.set_title("ODE model: Lotka-Volterra")
 
-    axis.plot(ts, ys[:, 0], linestyle="solid", marker="None", label="Predators")
-    axis.plot(ts, ys[:, 1], linestyle="dashed", marker="None", label="Prey")
+    axis.plot(ts, ys)
+    #
+    # axis.plot(ts, ys[:, 0], linestyle="solid", marker="None", label="Predators")
+    # axis.plot(ts, ys[:, 1], linestyle="dashed", marker="None", label="Prey")
 
     # axis.set_ylim((-1, 27))
     axis.set_xlim((jnp.amin(ts), jnp.amax(ts)))
-    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="small")
+    # axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="small")
 
     axis.set_xlabel("Time $t$")
     axis.set_ylabel("Solution $y$")
