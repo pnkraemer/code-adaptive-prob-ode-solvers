@@ -18,7 +18,7 @@ import tqdm
 from probdiffeq import adaptive, controls, ivpsolve, timestep
 from probdiffeq.impl import impl
 from probdiffeq.solvers import calibrated
-from probdiffeq.solvers.strategies import filters
+from probdiffeq.solvers.strategies import filters, fixedpoint
 from probdiffeq.solvers.strategies.components import corrections, priors
 from probdiffeq.taylor import autodiff
 from probdiffeq.util.doc_util import info
@@ -60,7 +60,7 @@ def timeit_fun_from_args(arguments: argparse.Namespace, /) -> Callable:
     return timer
 
 
-def solver_probdiffeq(num_derivatives: int, implementation, correction) -> Callable:
+def solver_probdiffeq(num_derivatives: int, implementation, correction, save_at) -> Callable:
     """Construct a solver that wraps ProbDiffEq's solution routines."""
 
     @jax.jit
@@ -76,9 +76,10 @@ def solver_probdiffeq(num_derivatives: int, implementation, correction) -> Calla
     @jax.jit
     def param_to_solution(tol):
         impl.select(implementation, ode_shape=(2,))
+
         # Build a solver
         ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
-        strategy = filters.filter_adaptive(ibm, correction())
+        strategy = fixedpoint.fixedpoint_adaptive(ibm, correction())
         solver = calibrated.mle(strategy)
         control = controls.proportional_integral()
         adaptive_solver = adaptive.adaptive(
@@ -93,8 +94,8 @@ def solver_probdiffeq(num_derivatives: int, implementation, correction) -> Calla
 
         # Solve
         dt0 = timestep.initial(vf_auto, (u0,))
-        solution = ivpsolve.simulate_terminal_values(
-            vf_probdiffeq, init, t0=t0, t1=t1, dt0=dt0, adaptive_solver=adaptive_solver
+        solution = ivpsolve.solve_and_save_at(
+            vf_probdiffeq, init, save_at=save_at, dt0=dt0, adaptive_solver=adaptive_solver
         )
 
         # Return the terminal value
@@ -103,7 +104,7 @@ def solver_probdiffeq(num_derivatives: int, implementation, correction) -> Calla
     return param_to_solution
 
 
-def solver_diffrax(*, solver) -> Callable:
+def solver_diffrax(*, solver, save_at) -> Callable:
     """Construct a solver that wraps Diffrax' solution routines."""
 
     @diffrax.ODETerm
@@ -120,7 +121,7 @@ def solver_diffrax(*, solver) -> Callable:
     @jax.jit
     def param_to_solution(tol):
         controller = diffrax.PIDController(atol=1e-3 * tol, rtol=tol)
-        saveat = diffrax.SaveAt(t0=False, t1=True, ts=None)
+        saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)
         solution = diffrax.diffeqsolve(
             vf_diffrax,
             y0=u0,
@@ -132,12 +133,12 @@ def solver_diffrax(*, solver) -> Callable:
             max_steps=10_000,
             solver=solver,
         )
-        return jax.block_until_ready(solution.ys[0, :])
+        return jax.block_until_ready(solution.ys)
 
     return param_to_solution
 
 
-def solver_scipy(*, method: str) -> Callable:
+def solver_scipy(*, method: str, save_at) -> Callable:
     """Construct a solver that wraps SciPy's solution routines."""
 
     def vf_scipy(_t, y):
@@ -154,12 +155,12 @@ def solver_scipy(*, method: str) -> Callable:
             vf_scipy,
             y0=u0,
             t_span=time_span,
-            t_eval=time_span,
+            t_eval=save_at,
             atol=1e-3 * tol,
             rtol=tol,
             method=method,
         )
-        return solution.y[:, -1]
+        return solution.y.T
 
     return param_to_solution
 
@@ -243,17 +244,22 @@ if __name__ == "__main__":
     tolerances = tolerances_from_args(args)
     timeit_fun = timeit_fun_from_args(args)
 
+    # Save-at:
+    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=100)
+
     # Assemble algorithms
     ts0 = corrections.ts0
-    ts0_iso = solver_probdiffeq(4, correction=ts0, implementation="isotropic")
+    ts0_iso = solver_probdiffeq(4, correction=ts0, implementation="isotropic", save_at=xs)
     algorithms = {
         r"ProbDiffEq: TS0($5$, isotropic)": ts0_iso,
-        "Diffrax: Tsit5()": solver_diffrax(solver=diffrax.Tsit5()),
-        "SciPy: 'RK45'": solver_scipy(method="RK45"),
+        "Diffrax: Tsit5()": solver_diffrax(solver=diffrax.Tsit5(), save_at=xs),
+        "SciPy: 'RK45'": solver_scipy(method="RK45", save_at=xs),
     }
 
     # Compute a reference solution
-    reference = solver_scipy(method="LSODA")(1e-15)
+    reference = solver_scipy(method="LSODA", save_at=xs)(1e-15)
+    print(reference.shape)
+
     precision_fun = rmse_relative(reference)
     print(tolerances)
 
