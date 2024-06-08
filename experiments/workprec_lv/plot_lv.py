@@ -18,11 +18,11 @@ def load_solution():
 def choose_style(label):
     """Choose a plotting style for a given algorithm."""
     if "ProbDiffEq" in label:
-        return {"color": "C0", "linestyle": "solid", "marker": "P"}
+        return {"color": "C0", "linestyle": "solid"}
     if "SciPy" in label:
-        return {"color": "C2", "linestyle": "dashed", "marker": "s"}
+        return {"color": "C2", "linestyle": "dashed"}
     if "iffrax" in label:
-        return {"color": "C3", "linestyle": "dotted", "marker": "*"}
+        return {"color": "C1", "linestyle": "dotted"}
     msg = f"Label {label} unknown."
     raise ValueError(msg)
 
@@ -38,13 +38,13 @@ def plot_results(axis, results):
         axis.loglog(precision, work_mean, label=label, **style)
 
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
-        axis.fill_between(precision, range_lower, range_upper, alpha=0.3)
+        axis.fill_between(precision, range_lower, range_upper, alpha=0.3, **style)
 
     axis.set_xlabel("Precision [relative RMSE]")
     axis.set_ylabel("Work [wall time, s]")
     axis.grid(linestyle="dotted")
     axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="small")
-    axis.set_ylim((1e-5, 1e1))
+    # axis.set_ylim((1e-5, 1e1))
     return axis
 
 
@@ -52,11 +52,8 @@ def plot_solution(axis, ts, ys, yscale="linear"):
     """Plot the IVP solution."""
     axis.set_title("ODE model: Lotka-Volterra")
 
-    axis.plot(
-        ts, ys[:, 0], linestyle="solid", marker="None", label="Predators"
-    )
+    axis.plot(ts, ys[:, 0], linestyle="solid", marker="None", label="Predators")
     axis.plot(ts, ys[:, 1], linestyle="dashed", marker="None", label="Prey")
-
 
     # axis.set_ylim((-1, 27))
     axis.set_xlim((jnp.amin(ts), jnp.amax(ts)))

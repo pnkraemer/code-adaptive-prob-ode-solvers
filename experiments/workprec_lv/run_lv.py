@@ -18,7 +18,7 @@ import tqdm
 from probdiffeq import adaptive, controls, ivpsolve, timestep
 from probdiffeq.impl import impl
 from probdiffeq.solvers import calibrated, markov
-from probdiffeq.solvers.strategies import filters, fixedpoint
+from probdiffeq.solvers.strategies import fixedpoint
 from probdiffeq.solvers.strategies.components import corrections, priors
 from probdiffeq.taylor import autodiff
 from probdiffeq.util.doc_util import info
@@ -48,19 +48,22 @@ def parse_arguments() -> argparse.Namespace:
 
 def tolerances_from_args(arguments: argparse.Namespace, /) -> jax.Array:
     """Choose vector of tolerances from the command-line arguments."""
-    return 0.1 ** jnp.arange(arguments.start, arguments.stop, step=0.5)
+    return 0.1 ** jnp.arange(arguments.start, arguments.stop, step=1.0)
 
 
 def timeit_fun_from_args(arguments: argparse.Namespace, /) -> Callable:
     """Construct a timeit-function from the command-line arguments."""
 
     def timer(fun, /):
+        _ = fun()
         return list(timeit.repeat(fun, number=1, repeat=arguments.repeats))
 
     return timer
 
 
-def solver_probdiffeq(num_derivatives: int, implementation, correction, save_at) -> Callable:
+def solver_probdiffeq(
+    num_derivatives: int, implementation, correction, save_at
+) -> Callable:
     """Construct a solver that wraps ProbDiffEq's solution routines."""
 
     @jax.jit
@@ -80,7 +83,7 @@ def solver_probdiffeq(num_derivatives: int, implementation, correction, save_at)
         # Build a solver
         ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
         strategy = fixedpoint.fixedpoint_adaptive(ibm, correction())
-        solver = calibrated.mle(strategy)
+        solver = calibrated.dynamic(strategy)
         control = controls.proportional_integral()
         adaptive_solver = adaptive.adaptive(
             solver, atol=1e-2 * tol, rtol=tol, control=control
@@ -95,14 +98,20 @@ def solver_probdiffeq(num_derivatives: int, implementation, correction, save_at)
         # Solve
         dt0 = timestep.initial(vf_auto, (u0,))
         solution = ivpsolve.solve_and_save_at(
-            vf_probdiffeq, init, save_at=save_at, dt0=dt0, adaptive_solver=adaptive_solver
+            vf_probdiffeq,
+            init,
+            save_at=save_at,
+            dt0=dt0,
+            adaptive_solver=adaptive_solver,
         )
 
         # posterior = solution.calibrate(sol.posterior, sol.output_scale)
         markov_seq_posterior = markov.select_terminal(solution.posterior)
         margs_posterior = markov.marginals(markov_seq_posterior, reverse=True)
 
-        mean = jnp.concatenate([margs_posterior.mean, solution.posterior.init.mean[[-1], ...]])
+        mean = jnp.concatenate(
+            [margs_posterior.mean, solution.posterior.init.mean[[-1], ...]]
+        )
         u = mean[:, 0, :]
         return u
 
@@ -139,7 +148,6 @@ def solver_diffrax(*, solver, save_at) -> Callable:
             solver=solver,
         )
         return solution.ys
-
 
     return lambda t: param_to_solution(t).block_until_ready()
 
@@ -214,6 +222,7 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
     """
 
     def parameter_list_to_workprecision(list_of_args, /):
+        works_min = []
         works_mean = []
         works_std = []
         precisions = []
@@ -222,9 +231,11 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
             times = timeit_fun(lambda: fun(arg))  # noqa: B023
 
             precisions.append(precision)
+            works_min.append(min(times))
             works_mean.append(statistics.mean(times))
             works_std.append(statistics.stdev(times))
         return {
+            "work_min": jnp.asarray(works_min),
             "work_mean": jnp.asarray(works_mean),
             "work_std": jnp.asarray(works_std),
             "precision": jnp.asarray(precisions),
@@ -251,23 +262,22 @@ if __name__ == "__main__":
     timeit_fun = timeit_fun_from_args(args)
 
     # Save-at:
-    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=100)
+    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=5)
 
     # Assemble algorithms
     ts0 = corrections.ts0
-    ts0_iso = solver_probdiffeq(4, correction=ts0, implementation="isotropic", save_at=xs)
+    ts0_iso = solver_probdiffeq(
+        5, correction=ts0, implementation="isotropic", save_at=xs
+    )
     algorithms = {
         r"ProbDiffEq: TS0($5$, isotropic)": ts0_iso,
-        "Diffrax: Tsit5()": solver_diffrax(solver=diffrax.Tsit5(), save_at=xs),
+        "Diffrax: Dopri5()": solver_diffrax(solver=diffrax.Dopri5(), save_at=xs),
         "SciPy: 'RK45'": solver_scipy(method="RK45", save_at=xs),
     }
 
     # Compute a reference solution
     reference = solver_scipy(method="LSODA", save_at=xs)(1e-15)
-    print(reference.shape)
-
     precision_fun = rmse_relative(reference)
-    print(tolerances)
 
     # Compute all work-precision diagrams
     results = {}
