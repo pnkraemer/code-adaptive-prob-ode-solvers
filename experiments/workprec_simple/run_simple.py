@@ -23,6 +23,10 @@ from probdiffeq.solvers.strategies.components import corrections, priors
 from probdiffeq.taylor import autodiff
 from probdiffeq.util.doc_util import info
 
+# todo: move the different solvers to the src
+# todo: simplify this script a bit
+# todo: add a solver that does save_every_step + offgrid_marginals
+
 
 def set_jax_config() -> None:
     """Set JAX and other external libraries up."""
@@ -127,7 +131,8 @@ def solver_diffrax(*, solver, save_at) -> Callable:
 
     @jax.jit
     def param_to_solution(tol):
-        controller = diffrax.PIDController(atol=1e-3 * tol, rtol=tol)
+        tol_ = 1e-2 * tol
+        controller = diffrax.PIDController(atol=1e-3 * tol_, rtol=tol_)
         saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)
         solution = diffrax.diffeqsolve(
             vf_diffrax,
@@ -255,17 +260,14 @@ if __name__ == "__main__":
 
     # Assemble algorithms
     ts0, ts1 = corrections.ts0, corrections.ts1
-    ts0_1 = solver_probdiffeq(1, correction=ts0, implementation="isotropic", save_at=xs)
     ts0_2 = solver_probdiffeq(2, correction=ts0, implementation="isotropic", save_at=xs)
     ts0_4 = solver_probdiffeq(4, correction=ts0, implementation="isotropic", save_at=xs)
     algorithms = {
         # r"ProbDiffEq: TS0($1$)": ts0_1,
-        r"ProbDiffEq: TS0($2$)": ts0_2,
-        r"ProbDiffEq: TS0($4$)": ts0_4,
-        # "Diffrax: Heun()": solver_diffrax(solver=diffrax.Heun(), save_at=xs),
-        "Diffrax: Bosh3()": solver_diffrax(solver=diffrax.Bosh3(), save_at=xs),
-        "Diffrax: Dopri5()": solver_diffrax(solver=diffrax.Dopri5(), save_at=xs),
-        # "SciPy: 'RK45'": solver_scipy(method="RK45", save_at=xs),
+        r"TS0($2$)": ts0_2,
+        r"TS0($4$)": ts0_4,
+        "Bosh3()": solver_diffrax(solver=diffrax.Bosh3(), save_at=xs),
+        "Dopri5()": solver_diffrax(solver=diffrax.Dopri5(), save_at=xs),
     }
 
     # Compute a reference solution
