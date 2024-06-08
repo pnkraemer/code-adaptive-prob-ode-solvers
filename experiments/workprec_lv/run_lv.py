@@ -17,7 +17,7 @@ import tqdm
 
 from probdiffeq import adaptive, controls, ivpsolve, timestep
 from probdiffeq.impl import impl
-from probdiffeq.solvers import calibrated
+from probdiffeq.solvers import calibrated, markov
 from probdiffeq.solvers.strategies import filters, fixedpoint
 from probdiffeq.solvers.strategies.components import corrections, priors
 from probdiffeq.taylor import autodiff
@@ -48,7 +48,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def tolerances_from_args(arguments: argparse.Namespace, /) -> jax.Array:
     """Choose vector of tolerances from the command-line arguments."""
-    return 0.1 ** jnp.arange(arguments.start, arguments.stop, step=1.0)
+    return 0.1 ** jnp.arange(arguments.start, arguments.stop, step=0.5)
 
 
 def timeit_fun_from_args(arguments: argparse.Namespace, /) -> Callable:
@@ -98,10 +98,15 @@ def solver_probdiffeq(num_derivatives: int, implementation, correction, save_at)
             vf_probdiffeq, init, save_at=save_at, dt0=dt0, adaptive_solver=adaptive_solver
         )
 
-        # Return the terminal value
-        return jax.block_until_ready(solution.u)
+        # posterior = solution.calibrate(sol.posterior, sol.output_scale)
+        markov_seq_posterior = markov.select_terminal(solution.posterior)
+        margs_posterior = markov.marginals(markov_seq_posterior, reverse=True)
 
-    return param_to_solution
+        mean = jnp.concatenate([margs_posterior.mean, solution.posterior.init.mean[[-1], ...]])
+        u = mean[:, 0, :]
+        return u
+
+    return lambda t: param_to_solution(t).block_until_ready()
 
 
 def solver_diffrax(*, solver, save_at) -> Callable:
@@ -133,9 +138,10 @@ def solver_diffrax(*, solver, save_at) -> Callable:
             max_steps=10_000,
             solver=solver,
         )
-        return jax.block_until_ready(solution.ys)
+        return solution.ys
 
-    return param_to_solution
+
+    return lambda t: param_to_solution(t).block_until_ready()
 
 
 def solver_scipy(*, method: str, save_at) -> Callable:
