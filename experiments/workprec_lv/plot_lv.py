@@ -18,11 +18,11 @@ def load_solution():
 def choose_style(label):
     """Choose a plotting style for a given algorithm."""
     if "ProbDiffEq" in label:
-        return {"color": "C0", "linestyle": "solid"}
+        return {"linestyle": "solid"}
     if "SciPy" in label:
-        return {"color": "C2", "linestyle": "dashed"}
+        return {"linestyle": "dashed"}
     if "iffrax" in label:
-        return {"color": "C1", "linestyle": "dotted"}
+        return {"linestyle": "dotted"}
     msg = f"Label {label} unknown."
     raise ValueError(msg)
 
@@ -30,15 +30,15 @@ def choose_style(label):
 def plot_results(axis, results):
     """Plot the results."""
     axis.set_title("Work-precision")
-    for label, wp in results.items():
+    for idx, (label, wp) in enumerate(results.items()):
         style = choose_style(label)
 
         precision = wp["precision"]
         work_mean, work_std = (wp["work_mean"], wp["work_std"])
-        axis.loglog(precision, work_mean, label=label, **style)
+        axis.loglog(precision, work_mean, label=label, color=f"C{idx}", **style)
 
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
-        axis.fill_between(precision, range_lower, range_upper, alpha=0.3, **style)
+        axis.fill_between(precision, range_lower, range_upper, alpha=0.3, color=f"C{idx}", **style)
 
     axis.set_xlabel("Precision [relative RMSE]")
     axis.set_ylabel("Work [wall time, s]")

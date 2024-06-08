@@ -144,7 +144,7 @@ def solver_diffrax(*, solver, save_at) -> Callable:
             saveat=saveat,
             stepsize_controller=controller,
             dt0=None,
-            max_steps=10_000,
+            max_steps=None,
             solver=solver,
         )
         return solution.ys
@@ -265,14 +265,24 @@ if __name__ == "__main__":
     xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=5)
 
     # Assemble algorithms
-    ts0 = corrections.ts0
-    ts0_iso = solver_probdiffeq(
-        5, correction=ts0, implementation="isotropic", save_at=xs
+    ts0, ts1 = corrections.ts0, corrections.ts1
+    ts0_1 = solver_probdiffeq(
+        1, correction=ts0, implementation="isotropic", save_at=xs
+    )
+    ts0_2 = solver_probdiffeq(
+        2, correction=ts0, implementation="isotropic", save_at=xs
+    )
+    ts0_4 = solver_probdiffeq(
+        4, correction=ts0, implementation="isotropic", save_at=xs
     )
     algorithms = {
-        r"ProbDiffEq: TS0($5$, isotropic)": ts0_iso,
+        # r"ProbDiffEq: TS0($1$)": ts0_1,
+        r"ProbDiffEq: TS0($2$)": ts0_2,
+        r"ProbDiffEq: TS0($4$)": ts0_4,
+        # "Diffrax: Heun()": solver_diffrax(solver=diffrax.Heun(), save_at=xs),
+        "Diffrax: Bosh3()": solver_diffrax(solver=diffrax.Bosh3(), save_at=xs),
         "Diffrax: Dopri5()": solver_diffrax(solver=diffrax.Dopri5(), save_at=xs),
-        "SciPy: 'RK45'": solver_scipy(method="RK45", save_at=xs),
+        # "SciPy: 'RK45'": solver_scipy(method="RK45", save_at=xs),
     }
 
     # Compute a reference solution
