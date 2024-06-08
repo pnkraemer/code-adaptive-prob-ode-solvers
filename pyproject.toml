@@ -7,16 +7,10 @@ name = "odecheckpts"
 version = "0.0.1"
 dependencies = [
     # Ensure that JAX is installed.
-]
-
-
-[project.optional-dependencies]
-dev = [
+    "probdiffeq",
     "pytest",
     "pytest_cases",
     "pre-commit",
-]
-experiments = [
-"matplotlib",
-"tqdm",
+    "matplotlib",
+    "tqdm",
 ]
