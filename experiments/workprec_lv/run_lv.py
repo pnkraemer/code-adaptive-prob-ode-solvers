@@ -1,4 +1,5 @@
 """Lotka-Volterra benchmark."""
+
 import argparse
 import functools
 import os
@@ -27,7 +28,6 @@ def set_jax_config() -> None:
     """Set JAX and other external libraries up."""
     # x64 precision
     jax.config.update("jax_enable_x64", True)
-
 
 
 def print_library_info() -> None:
