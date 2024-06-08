@@ -1,5 +1,3 @@
-"""Lotka-Volterra benchmark."""
-
 import argparse
 import functools
 import os
