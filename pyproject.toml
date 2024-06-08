@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odecheckpts"
+version = "0.0.1"
+dependencies = [
+    # Ensure that JAX is installed.
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest_cases",
+    "pre-commit",
+]
+experiments = [
+"matplotlib",
+"tqdm",
+]
