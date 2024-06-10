@@ -24,8 +24,8 @@ which installs the source code plus all dependencies.
 
 ## Experiments
 
-- [ ] Work-precision diagram on a simple ODE problem to show some raw results
-- [ ] Work-precision diagram on a slightly harder ODE problem to avoid reviewers asking for "more experiments"
+- [x] Work-precision diagram on a simple ODE problem to show some raw results
+- [x] Work-precision diagram on a slightly harder ODE problem to avoid reviewers asking for "more experiments"
 - [ ] Train a Neural ODE to show that we can use this algorithm
 - [ ] Visualise a probabilistic ODE solution for some eye-candy
 - [ ] Display the effect of fixed versus adaptive steps on stiff van-der-Pol to motivate adaptive step-size selection
