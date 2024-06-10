@@ -15,7 +15,7 @@ from probdiffeq.solvers.strategies.components import priors, corrections
 from probdiffeq.taylor import autodiff
 
 
-def solve(vf, u0_like, /, save_at, *, dt0, atol, rtol):
+def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
     # Select a state-space model
 
     with warnings.catch_warnings():
@@ -23,10 +23,14 @@ def solve(vf, u0_like, /, save_at, *, dt0, atol, rtol):
 
         implementation = "isotropic"
         impl.select(implementation, ode_shape=u0_like.shape)
-        num_derivatives = 4
+
+    num_derivatives = int(method[-1])
+    if method[:3] == "ts0":
+        correction = corrections.ts0()
+    else:
+        raise ValueError
 
     # Build a solver
-    correction = corrections.ts0()
     ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
     strategy = fixedpoint.fixedpoint_adaptive(ibm, correction)
     solver = calibrated.dynamic(strategy)
@@ -67,7 +71,7 @@ def solve(vf, u0_like, /, save_at, *, dt0, atol, rtol):
     return solve
 
 
-def solve_via_interpolate(vf, u0_like, /, save_at, *, dt0, atol, rtol):
+def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
     # Select a state-space model
 
     with warnings.catch_warnings():
@@ -75,7 +79,12 @@ def solve_via_interpolate(vf, u0_like, /, save_at, *, dt0, atol, rtol):
 
         implementation = "isotropic"
         impl.select(implementation, ode_shape=u0_like.shape)
-        num_derivatives = 4
+
+    num_derivatives = int(method[-1])
+    if method[:3] == "ts0":
+        correction = corrections.ts0()
+    else:
+        raise ValueError
 
     # Build a solver
     correction = corrections.ts0()
@@ -117,11 +126,16 @@ def solve_via_interpolate(vf, u0_like, /, save_at, *, dt0, atol, rtol):
     return solve
 
 
-def solve_diffrax(vf, _u0_like, /, save_at, *, dt0, atol, rtol):
+def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
+    if method == "tsit5":
+        solver = diffrax.Tsit5()
+    elif method == "bosh3":
+        solver = diffrax.Bosh3()
+    else:
+        raise ValueError
     term = diffrax.ODETerm(lambda t, y, args: vf(y, t, args))
     controller = diffrax.PIDController(atol=atol, rtol=rtol)
     saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)
-    solver = diffrax.Tsit5()
 
     def solve(u0, p):
         sol = diffrax.diffeqsolve(
