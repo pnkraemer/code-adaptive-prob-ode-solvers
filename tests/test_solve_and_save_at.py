@@ -1,6 +1,5 @@
 """Test the solve-and-save-at functionality."""
 
-import jax
 import jax.numpy as jnp
 import pytest_cases
 from odecheckpts import ivpsolve, ivps
@@ -23,14 +22,14 @@ def test_two_solvers_return_the_same_solution(solvers: tuple, ivp):
     solver1, solver2 = solvers
 
     dt0 = 0.1
+    atol, rtol = 1e-4, 1e-4
     save_at = jnp.linspace(*time_span, num=5)
     u0_like = u0  # infer shapes etc.
 
-    solve1 = solver1(vf, u0_like, save_at, dt0=dt0, atol=1e-2, rtol=1e-2)
+    solve1 = solver1(vf, u0_like, save_at, dt0=dt0, atol=atol, rtol=rtol)
     solution1, aux = solve1(u0, args)
 
-    solve2 = solver2(vf, u0_like, save_at, dt0=dt0, atol=1e-2, rtol=1e-2)
+    solve2 = solver2(vf, u0_like, save_at, dt0=dt0, atol=atol, rtol=rtol)
     solution2, aux = solve2(u0, args)
 
-    assert jax.tree.map(jnp.allclose, solution1, solution2)
-
+    assert jnp.allclose(solution1, solution2, atol=atol, rtol=rtol)
