@@ -8,6 +8,8 @@ version = "0.0.1"
 dependencies = [
     # Ensure that JAX is installed.
     "probdiffeq",   # our code
+    "diffeqzoo",    # ODE examples
+    "pytest_cases", # testing
     "pre-commit",   # some basic CI
     "matplotlib",   # plot
     "tqdm",         # progressbar

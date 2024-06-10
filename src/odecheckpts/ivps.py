@@ -1,5 +1,13 @@
 """Initial value problems."""
 
+from diffeqzoo import ivps, backend
 
-def rigid_body():
-    return None
+
+def logistic():
+    backend.select("jax")
+    f, *others = ivps.logistic()
+
+    def vf(u, t, p):
+        return f(u, *p)
+
+    return vf, *others
