@@ -99,8 +99,6 @@ if __name__ == "__main__":
     ts, ys = solve(u0, params)
 
     # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
-    # # But for this benchmark, such a change is on purpose.
-    # warnings.filterwarnings("ignore")
 
     # Read configuration from command line
     args = parse_arguments()
@@ -208,6 +206,7 @@ if __name__ == "__main__":
         jnp.save(os.path.dirname(__file__) + "/results.npy", results)
         jnp.save(os.path.dirname(__file__) + "/plot_ts.npy", ts)
         jnp.save(os.path.dirname(__file__) + "/plot_ys.npy", ys)
+        jnp.save(os.path.dirname(__file__) + "/plot_timeseries.npy", xs)
         print("\nSaving successful.\n")
     else:
         print("\nSkipped saving.\n")

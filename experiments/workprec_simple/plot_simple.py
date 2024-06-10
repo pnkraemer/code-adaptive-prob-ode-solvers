@@ -15,6 +15,10 @@ def load_solution():
     return ts, ys
 
 
+def load_timeseries():
+    return jnp.load(os.path.dirname(__file__) + "/plot_timeseries.npy")
+
+
 def choose_style(label):
     """Choose a plotting style for a given algorithm."""
     if "interp" in label:
@@ -37,7 +41,7 @@ def choose_style(label):
 
 def plot_results(axis, results):
     """Plot the results."""
-    axis.set_title("Work versus precision")
+    axis.set_title("Work versus precision", fontsize="medium")
     for label, wp in results.items():
         style = choose_style(label)
 
@@ -63,7 +67,7 @@ def plot_results(axis, results):
 
 def plot_results_error_vs_length(axis, results):
     """Plot the results."""
-    axis.set_title("Memory requirements")
+    axis.set_title("Memory requirements", fontsize="medium")
     for label, wp in results.items():
         if "TS" in label:
             style = choose_style(label)
@@ -79,12 +83,16 @@ def plot_results_error_vs_length(axis, results):
     return axis
 
 
-def plot_solution(axis, ts, ys, yscale="linear"):
+def plot_solution(axis, ts, ys, timeseries, yscale="linear"):
     """Plot the IVP solution."""
-    axis.set_title("Rigid body problem")
+    axis.set_title("Rigid body problem", fontsize="medium")
     for colour, y in zip(["black", "darkgreen", "darkred"], ys.T):
-        axis.plot(ts, y, color=colour, alpha=0.8)
-    axis.set_xlim((jnp.amin(ts), jnp.amax(ts)))
+        axis.plot(ts, y, linestyle="solid", color=colour, alpha=0.8)
+
+    for t in timeseries:
+        axis.axvline(t, linestyle="dotted", color="black")
+
+    axis.set_xlim((jnp.amin(ts) - 0.5, jnp.amax(ts) + 0.5))
     axis.set_xlabel("Time $t$")
     axis.set_ylabel("Solution $y$")
     axis.set_yscale(yscale)
@@ -92,40 +100,21 @@ def plot_solution(axis, ts, ys, yscale="linear"):
 
 
 layout = [
-    ["solution", "solution", "solution", "solution", "solution", "solution"],
-    [
-        "benchmark",
-        "benchmark",
-        "benchmark",
-        "error_vs_length",
-        "error_vs_length",
-        "error_vs_length",
-    ],
-    [
-        "benchmark",
-        "benchmark",
-        "benchmark",
-        "error_vs_length",
-        "error_vs_length",
-        "error_vs_length",
-    ],
-    [
-        "benchmark",
-        "benchmark",
-        "benchmark",
-        "error_vs_length",
-        "error_vs_length",
-        "error_vs_length",
-    ],
+    ["solution", "solution", "solution", "solution"],
+    ["benchmark", "benchmark", "error_vs_length", "error_vs_length"],
+    ["benchmark", "benchmark", "error_vs_length", "error_vs_length"],
+    ["benchmark", "benchmark", "error_vs_length", "error_vs_length"],
 ]
-fig, axes = plt.subplot_mosaic(layout, figsize=(8, 4), constrained_layout=True, dpi=300)
+fig, axes = plt.subplot_mosaic(layout, figsize=(8, 4), constrained_layout=True, dpi=100)
 
 
 results = load_results()
 ts, ys = load_solution()
+timeseries = load_timeseries()
 
 _ = plot_results(axes["benchmark"], results)
 _ = plot_results_error_vs_length(axes["error_vs_length"], results)
-_ = plot_solution(axes["solution"], ts, ys)
+_ = plot_solution(axes["solution"], ts, ys, timeseries)
 
 plt.savefig(os.path.dirname(__file__) + "/figure.pdf")
+plt.show()
