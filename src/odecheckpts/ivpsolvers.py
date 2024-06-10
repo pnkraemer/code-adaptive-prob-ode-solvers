@@ -1,6 +1,7 @@
 """Solution routines for initial value problems."""
 
 import functools
+import warnings
 
 import diffrax
 import jax
@@ -16,9 +17,13 @@ from probdiffeq.taylor import autodiff
 
 def solve(vf, u0_like, /, save_at, *, dt0, atol, rtol):
     # Select a state-space model
-    implementation = "isotropic"
-    impl.select(implementation, ode_shape=u0_like.shape)
-    num_derivatives = 4
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+
+        implementation = "isotropic"
+        impl.select(implementation, ode_shape=u0_like.shape)
+        num_derivatives = 4
 
     # Build a solver
     correction = corrections.ts0()
