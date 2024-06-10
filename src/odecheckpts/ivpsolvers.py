@@ -14,7 +14,7 @@ from probdiffeq.solvers.strategies.components import priors, corrections
 from probdiffeq.taylor import autodiff
 
 
-def solve_and_save_at(vf, u0_like, /, save_at, *, dt0, atol, rtol):
+def solve(vf, u0_like, /, save_at, *, dt0, atol, rtol):
     # Select a state-space model
     implementation = "isotropic"
     impl.select(implementation, ode_shape=u0_like.shape)
@@ -62,7 +62,7 @@ def solve_and_save_at(vf, u0_like, /, save_at, *, dt0, atol, rtol):
     return solve
 
 
-def solve_and_save_at_diffrax(vf, _u0_like, /, save_at, *, dt0, atol, rtol):
+def solve_diffrax(vf, _u0_like, /, save_at, *, dt0, atol, rtol):
     term = diffrax.ODETerm(lambda t, y, args: vf(y, t, args))
     controller = diffrax.PIDController(atol=atol, rtol=rtol)
     saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)

@@ -5,9 +5,9 @@ import pytest_cases
 from odecheckpts import ivpsolvers, ivps
 
 
-def case_solvers_probdiffeq_and_diffrax():
-    solver = ivpsolvers.solve_and_save_at
-    solver_diffrax = ivpsolvers.solve_and_save_at_diffrax
+def case_solvers_probdiffeq_versus_diffrax():
+    solver = ivpsolvers.solve
+    solver_diffrax = ivpsolvers.solve_diffrax
     return solver, solver_diffrax
 
 
