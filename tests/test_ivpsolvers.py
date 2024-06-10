@@ -11,6 +11,12 @@ def case_solvers_probdiffeq_versus_diffrax():
     return solver, solver_diffrax
 
 
+def case_solvers_checkpoint_versus_interpolate():
+    solver = ivpsolvers.solve_via_interpolate
+    solver_diffrax = ivpsolvers.solve_diffrax
+    return solver, solver_diffrax
+
+
 def case_ivp_1d_logistic():
     return ivps.logistic()
 

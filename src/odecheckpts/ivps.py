@@ -20,7 +20,6 @@ def rigid_body(*, time_span=(0.0, 10.0)):
     if not backend.has_been_selected:
         backend.select("jax")
 
-
     f, u0, time_span, args = ivps.rigid_body(time_span=time_span)
 
     def vf(u, t, p):

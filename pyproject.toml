@@ -9,6 +9,7 @@ dependencies = [
     # Ensure that JAX is installed.
     "probdiffeq",   # our code
     "diffeqzoo",    # ODE examples
+    "pytest",       # testing
     "pytest_cases", # testing
     "pre-commit",   # some basic CI
     "matplotlib",   # plot
@@ -17,3 +18,6 @@ dependencies = [
     "tueplots",     # plotting utilities
     "PyQt5",        # to resolve "FigureCanvas is not interactive"
 ]
+
+[tool.pytest.ini_options]
+addopts = "-v"
