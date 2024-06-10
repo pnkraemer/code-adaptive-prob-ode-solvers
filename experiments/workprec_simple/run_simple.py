@@ -70,16 +70,20 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
         works_mean = []
         works_std = []
         precisions = []
-        for arg in list_of_args:
-            precision = precision_fun(fun(arg))
-            times = timeit_fun(lambda: fun(arg))  # noqa: B023
+        lengths = []
+        for arg in tqdm.tqdm(list_of_args, leave=False):
+            sol, aux = fun(arg)
+            precision = precision_fun(sol)
+            length = len(aux["u0_solve"])
+            times = timeit_fun(lambda: fun(arg)[0].block_until_ready())  # noqa: B023
 
+            lengths.append(length)
             precisions.append(precision)
             works_min.append(min(times))
             works_mean.append(statistics.mean(times))
             works_std.append(statistics.stdev(times))
         return {
-            "length_of_longest_vector": jnp.ones_like(jnp.asarray(precisions)),
+            "length_of_longest_vector": jnp.asarray(lengths),
             "work_min": jnp.asarray(works_min),
             "work_mean": jnp.asarray(works_mean),
             "work_std": jnp.asarray(works_std),
@@ -119,7 +123,7 @@ if __name__ == "__main__":
         fun = ivpsolvers.solve(
             "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     @jax.jit
     def ts0_4(tol):
@@ -129,7 +133,7 @@ if __name__ == "__main__":
         fun = ivpsolvers.solve(
             "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     def ts0_2_interp(tol):
         if tol < 1e-8:
@@ -141,7 +145,7 @@ if __name__ == "__main__":
         fun = ivpsolvers.solve_via_interpolate(
             "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     def ts0_4_interp(tol):
         if tol < 1e-8:
@@ -153,7 +157,7 @@ if __name__ == "__main__":
         fun = ivpsolvers.solve_via_interpolate(
             "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     @jax.jit
     def bosh3(tol):
@@ -162,7 +166,7 @@ if __name__ == "__main__":
         fun = ivpsolvers.solve_diffrax(
             "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     @jax.jit
     def tsit5(tol):
@@ -171,7 +175,7 @@ if __name__ == "__main__":
         fun = ivpsolvers.solve_diffrax(
             "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     @jax.jit
     def dopri8(tol):

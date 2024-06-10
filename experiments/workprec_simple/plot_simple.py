@@ -34,9 +34,8 @@ def choose_style(label):
         style["color"] = "C0"
     if "4" in label or "opri" in label:
         style["color"] = "C1"
+
     return style
-    msg = f"Label {label} unknown."
-    raise ValueError(msg)
 
 
 def plot_results(axis, results):
@@ -58,6 +57,7 @@ def plot_results(axis, results):
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
         axis.fill_between(precision, range_lower, range_upper, alpha=0.3, **style)
 
+    axis.set_ylim((1e-4, 1e2))
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid(linestyle="dotted")
@@ -74,8 +74,14 @@ def plot_results_error_vs_length(axis, results):
 
             precision = wp["precision"]
             length = wp["length_of_longest_vector"]
-            axis.semilogx(precision, length, label=label, **style)
 
+            if "interp" in label:
+                n = len(precision) + 2
+                precision = precision[: n // 2]
+                length = length[: n // 2]
+            axis.loglog(precision, length, label=label, alpha=0.9, **style)
+
+    axis.set_ylim((1e0, 1e5))
     axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Length: solution vector")
