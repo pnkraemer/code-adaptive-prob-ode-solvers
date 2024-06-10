@@ -6,6 +6,7 @@ import warnings
 import diffrax
 import jax
 import jax.numpy as jnp
+import scipy.integrate
 
 from probdiffeq import adaptive, controls, ivpsolve
 from probdiffeq.impl import impl
@@ -37,7 +38,7 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
     control = controls.proportional_integral()
     asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
-    def solve(u0, p):
+    def solve_(u0, p):
         def vf_wrapped(y, /, *, t):
             return vf(y, t, p)
 
@@ -68,7 +69,7 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
         # Select the QOI
         return jax.vmap(impl.hidden_model.qoi_from_sample)(mean), sol
 
-    return solve
+    return solve_
 
 
 def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
@@ -87,7 +88,6 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
         raise ValueError
 
     # Build a solver
-    correction = corrections.ts0()
     ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
     strategy = smoothers.smoother_adaptive(ibm, correction)
     solver = calibrated.dynamic(strategy)
@@ -96,7 +96,7 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
 
     offgrid_marginals = jax.jit(solution.offgrid_marginals_searchsorted)
 
-    def solve(u0, p):
+    def solve_(u0, p):
         def vf_wrapped(y, /, *, t):
             return vf(y, t, p)
 
@@ -123,7 +123,7 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
 
         return dense, sol
 
-    return solve
+    return solve_
 
 
 def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
@@ -131,13 +131,15 @@ def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
         solver = diffrax.Tsit5()
     elif method == "bosh3":
         solver = diffrax.Bosh3()
+    elif method == "dopri8":
+        solver = diffrax.Dopri8()
     else:
         raise ValueError
     term = diffrax.ODETerm(lambda t, y, args: vf(y, t, args))
     controller = diffrax.PIDController(atol=atol, rtol=rtol)
     saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)
 
-    def solve(u0, p):
+    def solve_(u0, p):
         sol = diffrax.diffeqsolve(
             term,
             y0=u0,
@@ -152,4 +154,17 @@ def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
         )
         return sol.ys, sol
 
-    return solve
+    return solve_
+
+
+def asolve_scipy(method: str, vf, /, time_span, *, atol, rtol):
+    def solve_(u0, p):
+        def vf_scipy(t, y):
+            return vf(y, t, p)
+
+        solution = scipy.integrate.solve_ivp(
+            vf_scipy, y0=u0, t_span=time_span, atol=atol, rtol=rtol, method=method
+        )
+        return solution.t, solution.y.T
+
+    return solve_

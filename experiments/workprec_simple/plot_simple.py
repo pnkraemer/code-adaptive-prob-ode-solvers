@@ -17,11 +17,13 @@ def load_solution():
 
 def choose_style(label):
     """Choose a plotting style for a given algorithm."""
-    if "TS" in label:
-        style = {"linestyle": "solid"}
-    if "SciPy" in label:
+    if "interp" in label:
         style = {"linestyle": "dashed"}
-    if "()" in label:
+    elif "TS" in label:
+        style = {"linestyle": "solid"}
+    elif "SciPy" in label:
+        style = {"linestyle": "dashed"}
+    elif "()" in label:
         style = {"linestyle": "dotted"}
 
     if "2" in label or "eun" in label:
@@ -49,7 +51,7 @@ def plot_results(axis, results):
     axis.set_xlabel("Time-series error (avg. rel. RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid(linestyle="dotted")
-    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="small")
+    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
     return axis
 
 
@@ -64,7 +66,7 @@ def plot_results_error_vs_length(axis, results):
             length = wp["length_of_longest_vector"]
             axis.semilogx(precision, length, label=label, **style)
 
-    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="small")
+    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
     axis.set_xlabel("Time-series error (avg. rel. RMSE)")
     axis.set_ylabel("Length of the solution vector")
     axis.grid(linestyle="dotted")
