@@ -74,7 +74,7 @@ def solver_probdiffeq(
         return jnp.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
     u0 = jnp.asarray((1.0, 0.0, 0.9))
-    t0, t1 = (0.0, 50.0)
+    t0, _t1 = (0.0, 50.0)
 
     @jax.jit
     def param_to_solution(tol):
