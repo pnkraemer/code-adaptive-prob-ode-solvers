@@ -91,7 +91,7 @@ def plot_results_error_vs_length(axis, results):
         fontsize="x-small",
     )
     axis.set_xlabel("Time-series error (RMSE)")
-    axis.set_ylabel("Length: solution vector")
+    axis.set_ylabel("Length of solution vector")
     axis.grid(linestyle="dotted")
     return axis
 
@@ -100,7 +100,7 @@ def plot_solution(axis, ts, ys, timeseries, yscale="linear"):
     """Plot the IVP solution."""
     axis.set_title("Rigid body problem", fontsize="medium")
     for colour, y in zip(["black", "darkgreen", "darkred"], ys.T):
-        axis.plot(ts, y, linestyle="solid", color=colour, alpha=0.8)
+        axis.plot(ts, y, linewidth=0.75, linestyle="solid", color=colour, alpha=0.8)
 
     for t in timeseries:
         axis.axvline(t, linestyle="dotted", color="black")
@@ -128,6 +128,13 @@ timeseries = load_timeseries()
 _ = plot_results(axes["benchmark"], results)
 _ = plot_results_error_vs_length(axes["error_vs_length"], results)
 _ = plot_solution(axes["solution"], ts, ys, timeseries)
+
+
+axes["solution"].set_title("a.", loc="left", fontsize="medium", fontweight="bold")
+axes["benchmark"].set_title("b.", loc="left", fontsize="medium", fontweight="bold")
+axes["error_vs_length"].set_title(
+    "c.", loc="left", fontsize="medium", fontweight="bold"
+)
 
 plt.savefig(os.path.dirname(__file__) + "/figure.pdf")
 plt.show()
