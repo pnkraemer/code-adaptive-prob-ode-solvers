@@ -16,7 +16,7 @@ from probdiffeq.solvers.strategies.components import priors, corrections
 from probdiffeq.taylor import autodiff
 
 
-def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
+def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol, ode_order=1):
     # Select a state-space model
 
     with warnings.catch_warnings():
@@ -27,7 +27,7 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
 
     num_derivatives = int(method[-1])
     if method[:3] == "ts0":
-        correction = corrections.ts0()
+        correction = corrections.ts0(ode_order=ode_order)
     else:
         raise ValueError
 
@@ -39,13 +39,13 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
     asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
     def solve_(u0, p):
-        def vf_wrapped(y, /, *, t):
-            return vf(y, t, p)
+        def vf_wrapped(*y, t):
+            return vf(*y, t=t, p=p)
 
         # Initial state
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
-        tcoeffs = autodiff.taylor_mode_scan(vf_auto, (u0,), num=num_derivatives)
+        tcoeffs = autodiff.taylor_mode_scan(vf_auto, u0, num=num_derivatives - 1)
         output_scale = 1.0 * jnp.ones((2,)) if implementation == "blockdiag" else 1.0
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
@@ -67,10 +67,8 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
             [margs_posterior.mean, sol.posterior.init.mean[[-1], ...]]
         )
         # Select the QOI
-        return jax.vmap(impl.hidden_model.qoi_from_sample)(mean), {
-            "solution": sol,
-            "u0_solve": sol.u,
-        }
+        aux = {"solution": sol, "u0_solve": sol.u}
+        return jax.vmap(impl.hidden_model.qoi_from_sample)(mean), aux
 
     return solve_
 
@@ -101,8 +99,8 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
     offgrid_marginals = jax.jit(solution.offgrid_marginals_searchsorted)
 
     def solve_(u0, p):
-        def vf_wrapped(y, /, *, t):
-            return vf(y, t, p)
+        def vf_wrapped(*y, t):
+            return vf(*y, t=t, p=p)
 
         # Initial state
         t0 = save_at[0]
@@ -132,16 +130,20 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
     return solve_
 
 
-def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
+def solve_diffrax(
+    method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol, ode_order=1
+):
     if method == "tsit5":
         solver = diffrax.Tsit5()
     elif method == "bosh3":
         solver = diffrax.Bosh3()
+    elif method == "dopri5":
+        solver = diffrax.Dopri5()
     elif method == "dopri8":
         solver = diffrax.Dopri8()
     else:
         raise ValueError
-    term = diffrax.ODETerm(lambda t, y, args: vf(y, t, args))
+    term = diffrax.ODETerm(lambda t, y, args: vf(y, t=t, p=args))
     controller = diffrax.PIDController(atol=atol, rtol=rtol)
     saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)
 
@@ -158,7 +160,14 @@ def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
             max_steps=None,
             solver=solver,
         )
-        return sol.ys, {"solution": sol, "u0_solve": sol.ys}
+        if ode_order == 1:
+            u = sol.ys
+        elif ode_order == 2:
+            d = len(sol.ys[0])
+            u = sol.ys[:, : d // 2]
+        else:
+            raise ValueError
+        return u, {"solution": sol, "u0_solve": sol.ys}
 
     return solve_
 
@@ -166,7 +175,7 @@ def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
 def asolve_scipy(method: str, vf, /, time_span, *, atol, rtol):
     def solve_(u0, p):
         def vf_scipy(t, y):
-            return vf(y, t, p)
+            return vf(y, t=t, p=p)
 
         solution = scipy.integrate.solve_ivp(
             vf_scipy, y0=u0, t_span=time_span, atol=atol, rtol=rtol, method=method

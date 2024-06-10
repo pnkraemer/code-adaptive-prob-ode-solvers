@@ -77,6 +77,7 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
         lengths = []
         for arg in tqdm.tqdm(list_of_args, leave=False):
             sol, aux = fun(arg)
+
             precision = precision_fun(sol)
             length = len(aux["u0_solve"])
             times = timeit_fun(lambda: fun(arg)[0].block_until_ready())  # noqa: B023
@@ -103,9 +104,11 @@ if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
 
     # Simulate once to get plotting code
-    vf, u0, tspan, params = ivps.rigid_body(time_span=(0.0, 50.0))
+    vf, u0, tspan, params = ivps.pleiades_1st()
     solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
     ts, ys = solve(u0, params)
+
+    vf_2nd, u0_2nd, tspan, params = ivps.pleiades_2nd()
 
     # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
 
@@ -116,60 +119,83 @@ if __name__ == "__main__":
 
     # Save-at:
     xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=5)
-    dt0 = jnp.amax(ts) - jnp.amin(ts)
+    dt0 = 0.1
 
     # Assemble algorithms
 
     @jax.jit
-    def ts0_2(tol):
-        tol *= 100
-        u0_like = u0
+    def ts0_3(tol):
+        tol *= 10
+        u0_like = u0_2nd[0]
         atol, rtol = 1e-3 * tol, tol
         fun = ivpsolvers.solve(
-            "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+            "ts0-3",
+            vf_2nd,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
         )
-        return fun(u0, params)
+        return fun(u0_2nd, params)
 
     @jax.jit
-    def ts0_4(tol):
-        tol *= 100
-        u0_like = u0
+    def ts0_8(tol):
+        tol *= 10
+        u0_like = u0_2nd[0]
         atol, rtol = 1e-3 * tol, tol
         fun = ivpsolvers.solve(
-            "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+            "ts0-8",
+            vf_2nd,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
         )
-        return fun(u0, params)
+        return fun(u0_2nd, params)
 
-    def ts0_2_interp(tol):
-        if tol < 1e-8:
-            tol = 1e-3
-        tol *= 100
-
-        u0_like = u0
+    @jax.jit
+    def ts0_5(tol):
+        tol *= 10
+        u0_like = u0_2nd[0]
         atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve_via_interpolate(
-            "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        fun = ivpsolvers.solve(
+            "ts0-5",
+            vf_2nd,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
         )
-        return fun(u0, params)
-
-    def ts0_4_interp(tol):
-        if tol < 1e-8:
-            tol = 1e-3
-        tol *= 100
-
-        u0_like = u0
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve_via_interpolate(
-            "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
+        return fun(u0_2nd, params)
 
     @jax.jit
     def bosh3(tol):
         atol, rtol = 1e-3 * tol, tol
         u0_like = u0
         fun = ivpsolvers.solve_diffrax(
-            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def dopri5(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0
+        fun = ivpsolvers.solve_diffrax(
+            "dopri5",
+            vf,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
         )
         return fun(u0, params)
 
@@ -178,7 +204,7 @@ if __name__ == "__main__":
         atol, rtol = 1e-3 * tol, tol
         u0_like = u0
         fun = ivpsolvers.solve_diffrax(
-            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
         )
         return fun(u0, params)
 
@@ -187,21 +213,28 @@ if __name__ == "__main__":
         atol, rtol = 1e-3 * tol, tol
         u0_like = u0
         fun = ivpsolvers.solve_diffrax(
-            "dopri8", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+            "dopri8",
+            vf,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
         )
-        return fun(u0, params)[0]
+        return fun(u0, params)
 
     algorithms = {
-        "TS0(2) (interp., can't jit)": (tols_short, ts0_2_interp),
-        "TS0(4) (interp., can't jit)": (tols_short, ts0_4_interp),
-        "TS0(2)": (tols, ts0_2),
-        "TS0(4)": (tols, ts0_4),
+        "TS0(3)": (tols, ts0_3),
+        "TS0(5)": (tols, ts0_5),
+        "TS0(8)": (tols, ts0_8),
         "Bosh3()": (tols, bosh3),
         "Tsit5()": (tols, tsit5),
+        "Dopri8()": (tols, dopri8),
     }
 
     # Compute a reference solution
-    reference = dopri8(1e-15)
+    reference, _ = dopri5(1e-15)
     precision = rmse_absolute(reference)
 
     # Compute all work-precision diagrams
