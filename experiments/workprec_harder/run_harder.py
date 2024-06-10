@@ -118,7 +118,7 @@ if __name__ == "__main__":
     time = timeit_fun_from_args(args)
 
     # Save-at:
-    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=5)
+    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=50)
     dt0 = 0.1
 
     # Assemble algorithms
