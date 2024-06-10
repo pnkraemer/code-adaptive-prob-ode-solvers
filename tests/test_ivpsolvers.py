@@ -39,9 +39,13 @@ def test_two_solvers_return_the_same_solution(solvers: tuple, ivp):
     u0_like = u0  # infer shapes etc.
 
     solve1 = solver1(vf, u0_like, save_at, dt0=dt0, atol=atol, rtol=rtol)
-    solution1, aux = solve1(u0, args)
+    solution1, aux1 = solve1(u0, args)
 
     solve2 = solver2(vf, u0_like, save_at, dt0=dt0, atol=atol, rtol=rtol)
-    solution2, aux = solve2(u0, args)
+    solution2, aux2 = solve2(u0, args)
+
+    # We need access to u0_solve in the experiments
+    assert "u0_solve" in aux1.keys()
+    assert "u0_solve" in aux2.keys()
 
     assert jnp.allclose(solution1, solution2, atol=jnp.sqrt(atol), rtol=jnp.sqrt(rtol))

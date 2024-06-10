@@ -67,7 +67,10 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
             [margs_posterior.mean, sol.posterior.init.mean[[-1], ...]]
         )
         # Select the QOI
-        return jax.vmap(impl.hidden_model.qoi_from_sample)(mean), sol
+        return jax.vmap(impl.hidden_model.qoi_from_sample)(mean), {
+            "solution": sol,
+            "u0_solve": sol.u,
+        }
 
     return solve_
 
@@ -122,7 +125,7 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
 
         dense, _ = offgrid_marginals(ts=save_at, solution=sol, solver=solver)
 
-        return dense, sol
+        return dense, {"solution": sol, "u0_solve": sol.u}
 
     return solve_
 
@@ -153,7 +156,7 @@ def solve_diffrax(method: str, vf, _u0_like, /, save_at, *, dt0, atol, rtol):
             max_steps=None,
             solver=solver,
         )
-        return sol.ys, sol
+        return sol.ys, {"solution": sol, "u0_solve": sol.ys}
 
     return solve_
 
