@@ -85,6 +85,8 @@ def solve_via_interpolate(vf, u0_like, /, save_at, *, dt0, atol, rtol):
     control = controls.proportional_integral()
     asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
+    offgrid_marginals = jax.jit(solution.offgrid_marginals_searchsorted)
+
     def solve(u0, p):
         def vf_wrapped(y, /, *, t):
             return vf(y, t, p)
@@ -108,9 +110,7 @@ def solve_via_interpolate(vf, u0_like, /, save_at, *, dt0, atol, rtol):
             adaptive_solver=asolver,
         )
 
-        dense, _ = solution.offgrid_marginals_searchsorted(
-            ts=save_at, solution=sol, solver=solver
-        )
+        dense, _ = offgrid_marginals(ts=save_at, solution=sol, solver=solver)
 
         return dense, sol
 
