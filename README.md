@@ -24,10 +24,9 @@ which installs the source code plus all dependencies.
 
 ## Experiments
 
-- [ ] Visualise a probabilistic ODE solution
-- [ ] Display the effect of fixed versus adaptive steps on stiff van-der-Pol
-- [ ] Work-precision diagram on Pleiades
-- [ ] Work-precision diagram on the three-body problem
-- [ ] Work-precision diagram on Lotka-Volterra
-- [ ] Train a Neural ODE
-- [ ] Compare fixedpoint forward-pass to filter forward-pass and smoother forward-pass to demonstrate costs
+- [ ] Work-precision diagram on a simple ODE problem to show some raw results
+- [ ] Work-precision diagram on a slightly harder ODE problem to avoid reviewers asking for "more experiments"
+- [ ] Train a Neural ODE to show that we can use this algorithm
+- [ ] Visualise a probabilistic ODE solution for some eye-candy
+- [ ] Display the effect of fixed versus adaptive steps on stiff van-der-Pol to motivate adaptive step-size selection
+- [ ] Compare fixedpoint forward-pass to filter forward-pass and smoother forward-pass to demonstrate the 5% increase in costs
