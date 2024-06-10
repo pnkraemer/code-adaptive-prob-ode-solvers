@@ -15,4 +15,5 @@ dependencies = [
     "tqdm",         # progressbar
     "diffrax",      # competition
     "tueplots",     # plotting utilities
+    "PyQt5",        # to resolve "FigureCanvas is not interactive"
 ]
