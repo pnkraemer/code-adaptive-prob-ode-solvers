@@ -108,7 +108,9 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
         tcoeffs = autodiff.taylor_mode_scan(vf_auto, (u0,), num=num_derivatives)
-        output_scale = 1.0 * jnp.ones((2,)) if implementation == "blockdiag" else 1.0
+        output_scale = (
+            1.0 * jnp.ones(u0_like.shape) if implementation == "blockdiag" else 1.0
+        )
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
         # Solve

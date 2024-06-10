@@ -21,7 +21,7 @@ def load_timeseries():
 
 def choose_style(label):
     """Choose a plotting style for a given algorithm."""
-    if "interp" in label:
+    if "int" in label:
         style = {"linestyle": "dashed"}
     elif "TS" in label:
         style = {"linestyle": "solid"}
@@ -42,26 +42,30 @@ def plot_results(axis, results):
     """Plot the results."""
     axis.set_title("Work versus precision", fontsize="medium")
     for label, wp in results.items():
+        if "interp" in label:
+            label = label.replace(") (interp.", ", interp")
         style = choose_style(label)
 
         precision = wp["precision"]
         work_mean, work_std = (wp["work_mean"], wp["work_std"])
-        if "interp" in label:
-            n = len(precision) + 2
-            precision = precision[: n // 2]
-            work_mean = work_mean[: n // 2]
-            work_std = work_std[: n // 2]
 
-        axis.loglog(precision, work_mean, label=label, **style)
+        axis.loglog(precision, work_mean, marker=".", label=label, **style)
 
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
         axis.fill_between(precision, range_lower, range_upper, alpha=0.3, **style)
 
-    axis.set_ylim((1e-4, 1e2))
+    axis.set_ylim((1.1e-5, 1e1))
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid(linestyle="dotted")
-    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
+    axis.legend(
+        ncols=3,
+        handlelength=2.6,
+        loc="lower center",
+        facecolor="ghostwhite",
+        edgecolor="black",
+        fontsize="x-small",
+    )
     return axis
 
 
@@ -75,14 +79,17 @@ def plot_results_error_vs_length(axis, results):
             precision = wp["precision"]
             length = wp["length_of_longest_vector"]
 
-            if "interp" in label:
-                n = len(precision) + 2
-                precision = precision[: n // 2]
-                length = length[: n // 2]
-            axis.loglog(precision, length, label=label, alpha=0.9, **style)
+            axis.loglog(precision, length, marker=".", label=label, alpha=0.9, **style)
 
-    axis.set_ylim((1e0, 1e5))
-    axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
+    axis.set_ylim((0.9, 1e4))
+    axis.legend(
+        handlelength=3.0,
+        ncols=2,
+        loc="center left",
+        facecolor="ghostwhite",
+        edgecolor="black",
+        fontsize="x-small",
+    )
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Length: solution vector")
     axis.grid(linestyle="dotted")

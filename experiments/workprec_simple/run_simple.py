@@ -29,7 +29,11 @@ def parse_arguments() -> argparse.Namespace:
 
 def tolerances_from_args(arguments: argparse.Namespace, /) -> jax.Array:
     """Choose vector of tolerances from the command-line arguments."""
-    return 0.1 ** jnp.arange(arguments.start, arguments.stop, step=1.0)
+    n0, n1 = arguments.start, arguments.stop
+    n1_short = n0 + (1 + n1 - n0) * 2 // 3
+    tols_ = 0.1 ** jnp.arange(n0, n1, step=1.0)
+    tols_short_ = 0.1 ** jnp.arange(n0, n1_short, step=1.0)
+    return tols_short_, tols_
 
 
 def timeit_fun_from_args(arguments: argparse.Namespace, /) -> Callable:
@@ -83,6 +87,7 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
             works_mean.append(statistics.mean(times))
             works_std.append(statistics.stdev(times))
         return {
+            "list_of_args": list_of_args,
             "length_of_longest_vector": jnp.asarray(lengths),
             "work_min": jnp.asarray(works_min),
             "work_mean": jnp.asarray(works_mean),
@@ -106,7 +111,7 @@ if __name__ == "__main__":
 
     # Read configuration from command line
     args = parse_arguments()
-    tolerances = tolerances_from_args(args)
+    tols_short, tols = tolerances_from_args(args)
     time = timeit_fun_from_args(args)
 
     # Save-at:
@@ -187,12 +192,12 @@ if __name__ == "__main__":
         return fun(u0, params)[0]
 
     algorithms = {
-        "TS0(2) (interp., can't jit)": ts0_2_interp,
-        "TS0(4) (interp., can't jit)": ts0_4_interp,
-        "TS0(2)": ts0_2,
-        "TS0(4)": ts0_4,
-        "Bosh3()": bosh3,
-        "Tsit5()": tsit5,
+        "TS0(2) (interp., can't jit)": (tols_short, ts0_2_interp),
+        "TS0(4) (interp., can't jit)": (tols_short, ts0_4_interp),
+        "TS0(2)": (tols, ts0_2),
+        "TS0(4)": (tols, ts0_4),
+        "Bosh3()": (tols, bosh3),
+        "Tsit5()": (tols, tsit5),
     }
 
     # Compute a reference solution
@@ -201,9 +206,9 @@ if __name__ == "__main__":
 
     # Compute all work-precision diagrams
     results = {}
-    for label, algo in tqdm.tqdm(algorithms.items()):
+    for label, (tols, algo) in tqdm.tqdm(algorithms.items()):
         param_to_wp = workprec(algo, precision_fun=precision, timeit_fun=time)
-        results[label] = param_to_wp(tolerances)
+        results[label] = param_to_wp(tols)
 
     # Save results
     if args.save:
