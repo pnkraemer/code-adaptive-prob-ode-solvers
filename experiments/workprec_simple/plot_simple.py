@@ -37,12 +37,18 @@ def choose_style(label):
 
 def plot_results(axis, results):
     """Plot the results."""
-    axis.set_title("Work vs precision")
+    axis.set_title("Work versus precision")
     for label, wp in results.items():
         style = choose_style(label)
 
         precision = wp["precision"]
         work_mean, work_std = (wp["work_mean"], wp["work_std"])
+        if "interp" in label:
+            n = len(precision) + 2
+            precision = precision[: n // 2]
+            work_mean = work_mean[: n // 2]
+            work_std = work_std[: n // 2]
+
         axis.loglog(precision, work_mean, label=label, **style)
 
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
@@ -76,7 +82,8 @@ def plot_results_error_vs_length(axis, results):
 def plot_solution(axis, ts, ys, yscale="linear"):
     """Plot the IVP solution."""
     axis.set_title("Rigid body problem")
-    axis.plot(ts, ys, color="darkslategray")
+    for colour, y in zip(["black", "darkgreen", "darkred"], ys.T):
+        axis.plot(ts, y, color=colour, alpha=0.8)
     axis.set_xlim((jnp.amin(ts), jnp.amax(ts)))
     axis.set_xlabel("Time $t$")
     axis.set_ylabel("Solution $y$")

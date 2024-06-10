@@ -73,6 +73,7 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
 
 
 def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol):
+    small_value = 1e-6
     # Select a state-space model
 
     with warnings.catch_warnings():
@@ -113,8 +114,8 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
             init,
             # Small perturbation so that all save_at values
             # are in the *interior* of the domain.
-            t0=save_at[0] - 1e-4,
-            t1=save_at[-1] + 1e-4,
+            t0=save_at[0] - small_value,
+            t1=save_at[-1] + small_value,
             dt0=dt0,
             adaptive_solver=asolver,
         )

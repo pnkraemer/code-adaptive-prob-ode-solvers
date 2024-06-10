@@ -10,6 +10,12 @@ import tqdm
 
 from odecheckpts import ivps, ivpsolvers
 
+# todo: to make offgrid_marginals() fair, split save_at from t0 and t1
+#  (save_at must be in the interior)
+# todo: give the interpolate() methods the first half of tolerances (to save time...)
+# todo: run with ts0_2
+# todo: return lengths of the vectors
+
 
 def parse_arguments() -> argparse.Namespace:
     """Parse the arguments from the command line."""
@@ -34,20 +40,6 @@ def timeit_fun_from_args(arguments: argparse.Namespace, /) -> Callable:
         return list(timeit.repeat(fun, number=1, repeat=arguments.repeats))
 
     return timer
-
-
-#
-# def rmse_relative(expected: jax.Array, *, nugget=1e-5) -> Callable:
-#     """Compute the relative RMSE."""
-#     expected = jnp.asarray(expected)
-#
-#     def rmse(received):
-#         received = jnp.asarray(received)
-#         error_absolute = jnp.abs(expected - received)
-#         error_relative = error_absolute / jnp.abs(nugget + expected)
-#         return jnp.linalg.norm(error_relative) / jnp.sqrt(error_relative.size)
-#
-#     return rmse
 
 
 def rmse_absolute(expected: jax.Array) -> Callable:
@@ -142,6 +134,8 @@ if __name__ == "__main__":
         return fun(u0, params)[0]
 
     def ts0_2_interp(tol):
+        if tol < 1e-8:
+            tol = 1e-3
         tol *= 100
 
         u0_like = u0
@@ -152,6 +146,8 @@ if __name__ == "__main__":
         return fun(u0, params)[0]
 
     def ts0_4_interp(tol):
+        if tol < 1e-8:
+            tol = 1e-3
         tol *= 100
 
         u0_like = u0
@@ -189,7 +185,8 @@ if __name__ == "__main__":
         return fun(u0, params)[0]
 
     algorithms = {
-        "TS0(4) (via interpolate)": ts0_4_interp,
+        "TS0(2) (interp., can't jit)": ts0_2_interp,
+        "TS0(4) (interp., can't jit)": ts0_4_interp,
         "TS0(2)": ts0_2,
         "TS0(4)": ts0_4,
         "Bosh3()": bosh3,
