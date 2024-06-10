@@ -30,3 +30,11 @@ which installs the source code plus all dependencies.
 - [ ] Visualise a probabilistic ODE solution for some eye-candy
 - [ ] Display the effect of fixed versus adaptive steps on stiff van-der-Pol to motivate adaptive step-size selection
 - [ ] Compare fixedpoint forward-pass to filter forward-pass and smoother forward-pass to demonstrate the 5% increase in costs
+
+## Working with the source
+
+After following the installation instructions above, the test-dependencies are installed.
+To run the tests, run
+```commandline
+make test
+```
