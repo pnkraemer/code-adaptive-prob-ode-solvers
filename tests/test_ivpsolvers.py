@@ -2,12 +2,12 @@
 
 import jax.numpy as jnp
 import pytest_cases
-from odecheckpts import ivpsolve, ivps
+from odecheckpts import ivpsolvers, ivps
 
 
 def case_solvers_probdiffeq_and_diffrax():
-    solver = ivpsolve.solve_and_save_at
-    solver_diffrax = ivpsolve.solve_and_save_at_diffrax
+    solver = ivpsolvers.solve_and_save_at
+    solver_diffrax = ivpsolvers.solve_and_save_at_diffrax
     return solver, solver_diffrax
 
 
