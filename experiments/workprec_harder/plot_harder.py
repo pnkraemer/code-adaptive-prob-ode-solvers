@@ -57,7 +57,7 @@ def plot_results(axis, results):
     axis.legend(
         ncols=2,
         handlelength=3.0,
-        loc="lower center",
+        loc="best",
         facecolor="ghostwhite",
         edgecolor="black",
         fontsize="x-small",
@@ -68,9 +68,8 @@ def plot_results(axis, results):
 def plot_solution(axis, ys):
     """Plot the IVP solution."""
     axis.set_title("Pleiades problem", fontsize="medium")
-    # for colour, y in zip(["black", "darkgreen", "darkred"], ys.T):
-    axis.plot(ys[:, :7], ys[:, 7:14], color="silver")
 
+    axis.plot(ys[:, :7], ys[:, 7:14], color="silver")
     axis.plot(
         ys[[0], :7], ys[[0], 7:14], marker=".", markeredgecolor="black", color="silver"
     )
@@ -82,7 +81,9 @@ def plot_solution(axis, ys):
         markersize=7,
         color="silver",
     )
-    # axis.plot(ts, y, linewidth=0.75, linestyle="solid", color=colour, alpha=0.8)
+
+    axis.set_xlabel("$x$-coordinate")
+    axis.set_ylabel("$y$-coordinate")
     return axis
 
 
