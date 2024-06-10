@@ -74,7 +74,7 @@ def solver_probdiffeq(
         return jnp.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
     u0 = jnp.asarray((1.0, 0.0, 0.9))
-    t0, t1 = (0.0, 30.0)
+    t0, t1 = (0.0, 50.0)
 
     @jax.jit
     def param_to_solution(tol):
@@ -125,7 +125,7 @@ def solver_diffrax(*, solver, save_at) -> Callable:
         return jnp.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
     u0 = jnp.asarray((1.0, 0.0, 0.9))
-    t0, t1 = (0.0, 30.0)
+    t0, t1 = (0.0, 50.0)
 
     @jax.jit
     def param_to_solution(tol):
@@ -156,7 +156,7 @@ def solver_scipy(*, method: str, save_at) -> Callable:
         return np.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
     u0 = jnp.asarray((1.0, 0.0, 0.9))
-    time_span = np.asarray([0.0, 30.0])
+    time_span = np.asarray([0.0, 50.0])
 
     def param_to_solution(tol):
         solution = scipy.integrate.solve_ivp(
@@ -181,7 +181,7 @@ def plot_ivp_solution():
         return np.asarray([p1 * y[1] * y[2], p2 * y[0] * y[2], p3 * y[0] * y[1]])
 
     u0 = jnp.asarray((1.0, 0.0, 0.9))
-    time_span = np.asarray([0.0, 30.0])
+    time_span = np.asarray([0.0, 50.0])
 
     tol = 1e-12
     solution = scipy.integrate.solve_ivp(
@@ -227,6 +227,7 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
             works_mean.append(statistics.mean(times))
             works_std.append(statistics.stdev(times))
         return {
+            "length_of_longest_vector": jnp.ones_like(jnp.asarray(precisions)),
             "work_min": jnp.asarray(works_min),
             "work_mean": jnp.asarray(works_mean),
             "work_std": jnp.asarray(works_std),
