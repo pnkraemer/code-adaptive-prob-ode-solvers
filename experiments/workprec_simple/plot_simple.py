@@ -54,7 +54,7 @@ def plot_results(axis, results):
         range_lower, range_upper = work_mean - work_std, work_mean + work_std
         axis.fill_between(precision, range_lower, range_upper, alpha=0.3, **style)
 
-    axis.set_xlabel("Time-series error (avg. rel. RMSE)")
+    axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid(linestyle="dotted")
     axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
@@ -73,8 +73,8 @@ def plot_results_error_vs_length(axis, results):
             axis.semilogx(precision, length, label=label, **style)
 
     axis.legend(facecolor="ghostwhite", edgecolor="black", fontsize="x-small")
-    axis.set_xlabel("Time-series error (avg. rel. RMSE)")
-    axis.set_ylabel("Length of the solution vector")
+    axis.set_xlabel("Time-series error (RMSE)")
+    axis.set_ylabel("Length: solution vector")
     axis.grid(linestyle="dotted")
     return axis
 
