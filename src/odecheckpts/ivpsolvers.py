@@ -10,13 +10,25 @@ import scipy.integrate
 
 from probdiffeq import adaptive, controls, ivpsolve
 from probdiffeq.impl import impl
-from probdiffeq.solvers import calibrated, markov, solution
+from probdiffeq.solvers import calibrated, markov, solution, uncalibrated
 from probdiffeq.solvers.strategies import fixedpoint, smoothers
 from probdiffeq.solvers.strategies.components import priors, corrections
 from probdiffeq.taylor import autodiff
 
 
-def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol, ode_order=1):
+def solve(
+    method: str,
+    vf,
+    u0_like,
+    /,
+    save_at,
+    *,
+    dt0,
+    atol,
+    rtol,
+    ode_order=1,
+    calibrate="dynamic",
+):
     # Select a state-space model
 
     with warnings.catch_warnings():
@@ -34,11 +46,18 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol, ode_order=1)
     # Build a solver
     ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
     strategy = fixedpoint.fixedpoint_adaptive(ibm, correction)
-    solver = calibrated.dynamic(strategy)
+
+    if calibrate == "dynamic":
+        solver = calibrated.dynamic(strategy)
+    elif calibrate == "none":
+        solver = uncalibrated.solver(strategy)
+    else:
+        raise ValueError
+
     control = controls.proportional_integral()
     asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
-    def solve_(u0, p):
+    def solve_(u0: tuple, p, output_scale=1.0):
         def vf_wrapped(*y, t):
             return vf(*y, t=t, p=p)
 
@@ -46,7 +65,6 @@ def solve(method: str, vf, u0_like, /, save_at, *, dt0, atol, rtol, ode_order=1)
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
         tcoeffs = autodiff.taylor_mode_scan(vf_auto, u0, num=num_derivatives - 1)
-        output_scale = 1.0 * jnp.ones((2,)) if implementation == "blockdiag" else 1.0
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
         # Solve

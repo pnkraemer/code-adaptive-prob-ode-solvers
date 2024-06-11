@@ -85,3 +85,16 @@ def _pleiades():
         return jnp.concatenate((ddx, ddy))
 
     return vf, (u0, du0), (t0, t1), ()
+
+
+def neural_ode_mlp(*, layer_sizes: tuple):
+    if not backend.has_been_selected:
+        backend.select("jax")
+
+    f, u0, time_span, args = ivps.neural_ode_mlp(layer_sizes=layer_sizes)
+
+    def vf(u, *, t, p):
+        return f(u, t, *p)
+
+    u0 = jnp.atleast_1d(u0)
+    return vf, u0, time_span, args
