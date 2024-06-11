@@ -91,10 +91,19 @@ def neural_ode_mlp(*, layer_sizes: tuple):
     if not backend.has_been_selected:
         backend.select("jax")
 
-    f, u0, time_span, args = ivps.neural_ode_mlp(layer_sizes=layer_sizes)
+    _, u0, time_span, args = ivps.neural_ode_mlp(layer_sizes=layer_sizes)
 
     def vf(u, *, t, p):
-        return f(u, t, *p)
+        return _mlp(*p, jnp.concatenate([u, t[None]]))
 
     u0 = jnp.atleast_1d(u0)
     return vf, u0, time_span, args
+
+
+def _mlp(params, inputs):
+    # A multi-layer perceptron, i.e. a fully-connected neural network.
+    # Taken from: http://implicit-layers-tutorial.org/neural_odes/
+    for w, b in params:
+        outputs = jnp.dot(inputs, w) + b
+        inputs = jax.nn.tanh(outputs)
+    return outputs

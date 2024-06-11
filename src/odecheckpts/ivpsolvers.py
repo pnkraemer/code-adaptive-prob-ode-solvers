@@ -64,7 +64,7 @@ def solve(
         # Initial state
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
-        tcoeffs = autodiff.taylor_mode_scan(vf_auto, u0, num=num_derivatives - 1)
+        tcoeffs = autodiff.taylor_mode_scan(vf_auto, u0, num=num_derivatives)
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
         # Solve

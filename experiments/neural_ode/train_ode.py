@@ -10,14 +10,20 @@ import equinox
 
 from odecheckpts import train_util, ivps, ivpsolvers
 from probdiffeq.backend import control_flow
+import jax
 
-# Todo: Train the prior diffusion and observation noise, too
-# Todo: Use solve_and_save_at instead of solve_fixed_step
-# Todo: move the Neural ODE implementation to the src?
-#
+
+jax.config.update("jax_enable_x64", True)
+
+# Todo: why is the sine curve easy with fixed steps but hard with adaptive steps?
+# Todo: improve the MLP construction
+# Todo: decide which parameters to optimise
+# Todo: train a Runge-Kutta method for comparison
+# Todo: run for different seeds (probably wait until successful)
+# Todo: verify that the log-marginal likelihood actually sees all data
 
 # Parameters
-num_epochs = 100
+num_epochs = 10_000
 
 # Initialise the figure
 layout = [["data", "trained", "loss", "loss"]]
@@ -25,8 +31,8 @@ fig, axes = plt.subplot_mosaic(layout, figsize=(8, 2), constrained_layout=True)
 
 
 # Create and plot the data
-grid = jnp.linspace(0, 1, num=50)
-data = jnp.sin(5 * jnp.pi * grid)
+grid = jnp.linspace(0, 1, num=10)
+data = jnp.sin(2 * jnp.pi * grid)
 for lbl in ["trained", "data"]:
     axes[lbl].plot(grid, data, "-", linewidth=5, alpha=0.5, label="Data", color="C1")
 
@@ -36,7 +42,7 @@ vf, u0, (t0, t1), f_args = ivps.neural_ode_mlp(layer_sizes=(2, 20, 1))
 
 # Make an ODE solver
 solve = ivpsolvers.solve(
-    "ts0-1", vf, u0, save_at=grid, dt0=0.1, atol=1e-2, rtol=1e-2, calibrate="none"
+    "ts0-4", vf, u0, save_at=grid, dt0=1.0, atol=1e-1, rtol=1e-1, calibrate="none"
 )
 
 
@@ -46,11 +52,11 @@ axes["data"].plot(grid, u, ".-", label="Initial estimate", color="C0")
 
 
 # Initialise the optimisation problem
-p_ = [(u0,), f_args, 1.0, 1e-2]
+p_ = [f_args]
 p, unflatten = jax.flatten_util.ravel_pytree(p_)
 loss_fn = train_util.loss(solver=solve, unflatten=unflatten)
-optim = optax.adam(learning_rate=1e-1)
-update_fn = train_util.update(optim, loss_fn)
+optim = optax.adam(learning_rate=1e-2)
+update = train_util.update(optim, loss_fn)
 
 # Make a reverse-mode differentiable while-loop
 
@@ -67,24 +73,28 @@ with context_compute_gradient:
     losses = []
     state = optim.init(p)
     progressbar = tqdm.tqdm(range(num_epochs))
-    loss_value = loss_fn(p, grid, data)
+    loss_value = loss_fn(p, X=grid, y=data, u0=(u0,), stdev=1e-2, scale=1.0)
     losses.append(loss_value)
-    progressbar.set_description(f"Loss: {loss_value:.1f}")
+    progressbar.set_description(f"Loss: {loss_value:.4e}")
     for _ in progressbar:
-        p, state, info = update_fn(p, state, grid, data)
+        try:
+            p, state, info = update(
+                p, state, X=grid, y=data, u0=(u0,), stdev=1e-2, scale=1.0
+            )
 
-        loss_value = info["loss"]
-        losses.append(loss_value)
-        progressbar.set_description(f"Loss: {loss_value:.1f}")
-        print(unflatten(p))
+            loss_value = info["loss"]
+            losses.append(loss_value)
+            progressbar.set_description(f"Loss: {loss_value:.4e}")
+        except KeyboardInterrupt:
+            break
 
 # Plot the loss-curve
 losses = jnp.asarray(losses)
 axes["loss"].plot(losses)
 
 # Plot the final guess
-*final, _ = unflatten(p)
-u, _ = solve(*final)
+(p_,) = unflatten(p)
+u, _ = solve((u0,), p_, output_scale=1.0)
 axes["trained"].plot(grid, u, ".-", label="Final guess", color="C0")
 
 
