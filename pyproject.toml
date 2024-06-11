@@ -17,6 +17,7 @@ dependencies = [
     "diffrax",      # competition
     "tueplots",     # plotting utilities
     "PyQt5",        # to resolve "FigureCanvas is not interactive"
+    "optax",        # Optimisation
 ]
 
 [tool.pytest.ini_options]
