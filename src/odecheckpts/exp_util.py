@@ -4,14 +4,6 @@ import dataclasses
 from typing import Callable
 
 
-def plot_to_pgf(filename, X, y):
-    if filename[-4:] != ".dat":
-        filename = f"{filename}.dat"
-    with open(filename, "w") as file1:
-        for x_, y_ in zip(X, y):
-            file1.write(f"{x_} {y_}\n")
-
-
 def plot_params():
     fontsize = fontsize_uniform(10)
     axes_lines = axes.lines(base_width=0.35)
