@@ -5,7 +5,7 @@ from odecheckpts import exp_util
 
 TODO = "\nTODO: Rename all saved data into data_* so the directory is clean.\n"
 PLOT_PARAMS = exp_util.plot_params()
-STYLE = exp_util.style_rigid_body()
+STYLE = exp_util.style_simple()
 
 
 def main():
@@ -22,8 +22,9 @@ def main():
         ["solution", "solution", "solution", "solution", "solution"],
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
+        ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
     ]
-    fig, axes = plt.subplot_mosaic(layout, figsize=(8, 5), dpi=100)
+    fig, axes = plt.subplot_mosaic(layout, figsize=(8, 4.5), dpi=100)
 
     # Plot each set of results
     _ = plot_results(axes["benchmark"], results)
@@ -88,8 +89,7 @@ def plot_results(axis, results):
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid()
-    legend = axis.legend(ncols=3)
-    legend.get_frame().set_linewidth(0.5)
+    axis.legend(ncols=3)
     return axis
 
 

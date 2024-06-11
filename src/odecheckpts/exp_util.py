@@ -15,6 +15,7 @@ def plot_params():
         "text.usetex": True,
         "text.latex.preamble": r"\usepackage{cmbright}",
         "figure.constrained_layout.use": True,
+        "lines.markeredgewidth": 0.5,
         **fontsize,
         **axes_lines,
         **axes_legend,
@@ -44,7 +45,51 @@ class Style:
     alpha_fill_between: Callable[[str], float]
 
 
-def style_rigid_body():
+def style_harder():
+    def label(string, /):
+        if "()" in string:
+            string = string.replace("()", "")
+        if "interp." in string:
+            string = string.replace("interp.", "interpolate")
+        return string
+
+    def color(string, /):
+        if "3" in string:
+            return "black"
+        if "5" in string:
+            return "darkorange"
+        if "8" in string:
+            return "steelblue"
+        return "black"
+
+    def marker(string, /):
+        if "bosh3" in string.lower():
+            return "P"
+        if "tsit5" in string.lower():
+            return "P"
+        if "dopri8" in string.lower():
+            return "P"
+        return "o"
+
+    def linestyle(string, /):
+        if "bosh3" in string.lower():
+            return "dotted"
+        if "tsit5" in string.lower():
+            return "dotted"
+        if "dopri8" in string.lower():
+            return "dotted"
+
+    return Style(
+        marker=marker,
+        label=label,
+        color=color,
+        linestyle=linestyle,
+        alpha_line=None,
+        alpha_fill_between=lambda _s: 0.1,
+    )
+
+
+def style_simple():
     def marker(string, /):
         if "can't" in string.lower() or "interp" in string.lower():
             return "^"
