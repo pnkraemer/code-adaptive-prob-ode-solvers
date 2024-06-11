@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 import optax
 import tqdm
 
+import equinox
+
 from odecheckpts import train_util, ivps, ivpsolvers
 from probdiffeq import ivpsolve
 from probdiffeq.impl import impl
-
+from probdiffeq.backend import control_flow
 
 # Todo: Train the prior diffusion and observation noise, too
 # Todo: Use solve_and_save_at instead of solve_fixed_step
@@ -61,18 +63,25 @@ optim = optax.adam(learning_rate=2e-2)
 update_fn = train_util.update(optim, loss_fn)
 
 
-losses = []
-state = optim.init(p)
-progressbar = tqdm.tqdm(range(num_epochs))
-loss_value = loss_fn(p, grid, data)
-losses.append(loss_value)
-progressbar.set_description(f"Loss: {loss_value:.1f}")
-for _ in progressbar:
-    p, state, info = update_fn(p, state, grid, data)
+def while_loop_func(*a, **kw):
+    """Evaluate a bounded while loop."""
+    return equinox.internal.while_loop(*a, **kw, kind="bounded", max_steps=100)
 
-    loss_value = info["loss"]
+
+context_compute_gradient = control_flow.context_overwrite_while_loop(while_loop_func)
+with context_compute_gradient:
+    losses = []
+    state = optim.init(p)
+    progressbar = tqdm.tqdm(range(num_epochs))
+    loss_value = loss_fn(p, grid, data)
     losses.append(loss_value)
     progressbar.set_description(f"Loss: {loss_value:.1f}")
+    for _ in progressbar:
+        p, state, info = update_fn(p, state, grid, data)
+
+        loss_value = info["loss"]
+        losses.append(loss_value)
+        progressbar.set_description(f"Loss: {loss_value:.1f}")
 
 losses = jnp.asarray(losses)
 
