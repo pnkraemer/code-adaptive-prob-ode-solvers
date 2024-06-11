@@ -5,8 +5,8 @@ from typing import Callable
 
 
 def plot_params():
-    fontsize = fontsize_uniform(10)
-    axes_lines = axes.lines(base_width=0.35)
+    fontsize = fontsize_uniform(11)
+    axes_lines = axes.lines(base_width=0.25)
     axes_legend = axes.legend()
     axes_grid = axes.grid()
     axes_ticks = axes.tick_direction(x="in", y="in")
@@ -14,6 +14,7 @@ def plot_params():
         "markers.fillstyle": "none",
         "text.usetex": True,
         "text.latex.preamble": r"\usepackage{cmbright}",
+        "figure.constrained_layout.use": True,
         **fontsize,
         **axes_lines,
         **axes_legend,
@@ -26,10 +27,10 @@ def fontsize_uniform(base):
     return {
         "font.size": base,
         "axes.labelsize": "medium",
+        "axes.titlesize": "medium",
         "legend.fontsize": "small",
         "xtick.labelsize": "small",
         "ytick.labelsize": "small",
-        "axes.titlesize": "medium",
     }
 
 
@@ -39,6 +40,7 @@ class Style:
     label: Callable[[str], str]
     color: Callable[[str], str]
     linestyle: Callable[[str], str]
+    alpha_line: Callable[[str], float]
     alpha_fill_between: Callable[[str], float]
 
 
@@ -89,4 +91,5 @@ def style_rigid_body():
         color=color,
         alpha_fill_between=alpha_fill_between,
         linestyle=linestyle,
+        alpha_line=lambda s: 0.9,
     )
