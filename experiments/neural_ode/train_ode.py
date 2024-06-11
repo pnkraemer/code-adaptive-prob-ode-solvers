@@ -15,9 +15,11 @@ import jax
 
 jax.config.update("jax_enable_x64", True)
 
-# Todo: why is the sine curve easy with fixed steps but hard with adaptive steps?
+# todo: minibatch the data?
+# Todo: why is the sine curve easy with fixed steps but harder with adaptive steps?
 # Todo: improve the MLP construction
-# Todo: decide which parameters to optimise
+# Todo: decide which parameters to optimise:
+#   output scale would also be great, regression noise too
 # Todo: train a Runge-Kutta method for comparison
 # Todo: run for different seeds (probably wait until successful)
 # Todo: verify that the log-marginal likelihood actually sees all data
