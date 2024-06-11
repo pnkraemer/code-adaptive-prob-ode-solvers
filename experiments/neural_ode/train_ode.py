@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 import tqdm
-
+import os
 import equinox
 
 from odecheckpts import train_util, ivps, ivpsolvers
@@ -29,7 +29,7 @@ num_epochs = 10_000
 
 # Initialise the figure
 layout = [["data", "trained", "loss", "loss"]]
-fig, axes = plt.subplot_mosaic(layout, figsize=(8, 2), constrained_layout=True)
+fig, axes = plt.subplot_mosaic(layout, figsize=(8, 3), constrained_layout=True)
 
 
 # Create and plot the data
@@ -93,6 +93,7 @@ with context_compute_gradient:
 # Plot the loss-curve
 losses = jnp.asarray(losses)
 axes["loss"].plot(losses)
+axes["loss"].set_yscale("symlog")
 
 # Plot the final guess
 (p_,) = unflatten(p)
@@ -112,4 +113,5 @@ axes["loss"].set_xlabel("Epoch $i$")
 axes["loss"].set_ylabel(r"Loss $\rho$")
 
 # Show the plot
+plt.savefig(os.path.dirname(__file__) + "/figure.pdf")
 plt.show()
