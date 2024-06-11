@@ -20,6 +20,8 @@ def plot_params():
     axes_ticks = axes.tick_direction(x="in", y="in")
     return {
         "markers.fillstyle": "none",
+        "text.usetex": True,
+        "text.latex.preamble": r"\usepackage{cmbright}",
         **fontsize,
         **axes_lines,
         **axes_legend,
