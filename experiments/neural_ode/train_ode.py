@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 from diffeqzoo import backend, ivps
+import tqdm
 
 from probdiffeq import ivpsolve
 from probdiffeq.impl import impl
@@ -15,20 +16,15 @@ from probdiffeq.solvers.strategies.components import corrections, priors
 if not backend.has_been_selected:
     backend.select("jax")  # ivp examples in jax
 
-# Catch NaN gradients in CI
-# Disable to improve speed
-jax.config.update("jax_debug_nans", True)
-
-jax.config.update("jax_platform_name", "cpu")
+num_epochs = 10_000
 
 impl.select("isotropic", ode_shape=(1,))
 
 grid = jnp.linspace(0, 1, num=100)
 data = jnp.sin(5 * jnp.pi * grid)
 
-plt.plot(grid, data, ".-", label="Data")
-plt.legend()
-plt.show()
+layout = [["data", "trained", "loss", "loss"]]
+fig, axes = plt.subplot_mosaic(layout, figsize=(8, 2), constrained_layout=True)
 
 
 def build_loss_fn(vf, initial_values, solver, *, standard_deviation=1e-2):
@@ -89,28 +85,31 @@ sol = ivpsolve.solve_fixed_grid(
     lambda *a, **kw: vf(*a, **kw, p=f_args), init, grid=grid, solver=solver_ts0
 )
 
-plt.plot(sol.t, sol.u, ".-", label="Initial estimate")
-plt.plot(grid, data, ".-", label="Data")
-plt.legend()
-plt.show()
+axes["data"].plot(sol.t, sol.u, ".-", label="Initial estimate", color="C0")
+axes["data"].plot(sol.t, data, "-", linewidth=5, alpha=0.5, label="Data", color="C1")
+axes["data"].legend(fontsize="x-small")
+
 
 loss_fn = build_loss_fn(vf=vf, initial_values=(u0,), solver=solver_ts0)
 optim = optax.adam(learning_rate=2e-2)
 update_fn = build_update_fn(optimizer=optim, loss_fn=loss_fn)
 
+losses = []
 p = f_args
 state = optim.init(p)
-chunk_size = 25
-for i in range(chunk_size):
-    for _ in range(chunk_size**2):
-        p, state = update_fn(p, state)
-    print(
-        "Negative log-marginal-likelihood after "
-        f"{(i+1)*chunk_size**2}/{chunk_size**3} steps:",
-        loss_fn(p),
-    )
+progressbar = tqdm.tqdm(range(num_epochs))
+loss_value = loss_fn(p)
+losses.append(loss_value)
+progressbar.set_description(f"Loss: {loss_value:.1f}")
+for _ in progressbar:
+    p, state = update_fn(p, state)
+    loss_value = loss_fn(p)
+    losses.append(loss_value)
+    progressbar.set_description(f"Loss: {loss_value:.1f}")
 
-plt.plot(sol.t, data, "-", linewidth=5, alpha=0.5, label="Data")
+losses = jnp.asarray(losses)
+
+axes["trained"].plot(sol.t, data, "-", linewidth=5, alpha=0.5, label="Data", color="C1")
 tcoeffs = (u0, vf(u0, t=t0, p=p))
 init = solver_ts0.initial_condition(tcoeffs, output_scale=1.0)
 
@@ -119,7 +118,7 @@ sol = ivpsolve.solve_fixed_grid(
 )
 
 
-plt.plot(sol.t, sol.u, ".-", label="Final guess")
+axes["trained"].plot(sol.t, sol.u, ".-", label="Final guess", color="C0")
 
 tcoeffs = (u0, vf(u0, t=t0, p=f_args))
 init = solver_ts0.initial_condition(tcoeffs, output_scale=1.0)
@@ -127,8 +126,23 @@ init = solver_ts0.initial_condition(tcoeffs, output_scale=1.0)
 sol = ivpsolve.solve_fixed_grid(
     lambda *a, **kw: vf(*a, **kw, p=f_args), init, grid=grid, solver=solver_ts0
 )
-plt.plot(sol.t, sol.u, ".-", label="Initial guess")
+# axes["trained"].plot(sol.t, sol.u, ".-", label="Initial guess")
 
 
-plt.legend()
+axes["trained"].legend(fontsize="x-small")
+
+axes["loss"].plot(losses)
+
+
+# Label everything
+axes["data"].set_title("Before training", fontsize="medium")
+axes["trained"].set_title("After training", fontsize="medium")
+axes["loss"].set_title("Loss evolution", fontsize="medium")
+
+for lbl in ["trained", "data"]:
+    axes[lbl].set_xlabel("Time $t$")
+    axes[lbl].set_ylabel("State $y$")
+
+axes["loss"].set_xlabel("Epoch $i$")
+axes["loss"].set_ylabel(r"Loss $\rho$")
 plt.show()
