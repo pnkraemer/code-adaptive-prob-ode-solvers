@@ -12,18 +12,140 @@ from odecheckpts import ivps, ivpsolvers
 
 # todo: to make offgrid_marginals() fair, split save_at from t0 and t1
 #  (save_at must be in the interior)
-# todo: give the interpolate() methods the first half of tolerances (to save time...)
-# todo: run with ts0_2
-# todo: return lengths of the vectors
+
+
+def main():
+    # Set up all the configs
+    jax.config.update("jax_enable_x64", True)
+
+    # Simulate once to get plotting code
+    vf, u0, tspan, params = ivps.rigid_body(time_span=(0.0, 50.0))
+    solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
+    ts, ys = solve(u0, params)
+
+    # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
+
+    # Read configuration from command line
+    args = parse_arguments()
+    print("\n", args, "\n")
+    tols_short, tols = tolerances_from_args(args)
+    time = timeit_fun_from_args(args)
+
+    # Save-at:
+    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=5)
+    dt0 = jnp.amax(ts) - jnp.amin(ts)
+
+    # Assemble algorithms
+
+    @jax.jit
+    def ts0_2(tol):
+        tol *= 100
+        u0_like = u0[0]
+        atol, rtol = 1e-3 * tol, tol
+        fun = ivpsolvers.solve(
+            "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def ts0_4(tol):
+        tol *= 100
+        u0_like = u0[0]
+        atol, rtol = 1e-3 * tol, tol
+        fun = ivpsolvers.solve(
+            "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)
+
+    def ts0_2_interp(tol):
+        if tol < 1e-8:
+            tol = 1e-3
+        tol *= 100
+
+        u0_like = u0[0]
+        atol, rtol = 1e-3 * tol, tol
+        fun = ivpsolvers.solve_via_interpolate(
+            "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)
+
+    def ts0_4_interp(tol):
+        if tol < 1e-8:
+            tol = 1e-3
+        tol *= 100
+
+        u0_like = u0[0]
+        atol, rtol = 1e-3 * tol, tol
+        fun = ivpsolvers.solve_via_interpolate(
+            "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def bosh3(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0[0]
+        fun = ivpsolvers.solve_diffrax(
+            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def tsit5(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0[0]
+        fun = ivpsolvers.solve_diffrax(
+            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def dopri8(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0[0]
+        fun = ivpsolvers.solve_diffrax(
+            "dopri8", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
+        )
+        return fun(u0, params)[0]
+
+    algorithms = {
+        "TS0(2) (interpolate, can't jit) via probdiffeq": (tols_short, ts0_2_interp),
+        "TS0(4) (interpolate, can't jit) via probdiffeq": (tols_short, ts0_4_interp),
+        "TS0(2) via probdiffeq": (tols, ts0_2),
+        "TS0(4) via probdiffeq": (tols, ts0_4),
+        "Bosh3() via diffrax": (tols, bosh3),
+        "Tsit5() via diffrax": (tols, tsit5),
+    }
+    print("\n", list(algorithms.keys()), "\n")
+
+    # Compute a reference solution
+    reference = dopri8(1e-15)
+    precision = rmse_absolute(reference)
+
+    # Compute all work-precision diagrams
+    results = {}
+    for label, (tols, algo) in tqdm.tqdm(algorithms.items()):
+        param_to_wp = workprec(algo, precision_fun=precision, timeit_fun=time)
+        results[label] = param_to_wp(tols)
+
+    # Save results
+    if args.nosave:
+        print("\nSkipped saving.\n")
+    else:
+        jnp.save(os.path.dirname(__file__) + "/data_results.npy", results)
+        jnp.save(os.path.dirname(__file__) + "/data_ts.npy", ts)
+        jnp.save(os.path.dirname(__file__) + "/data_ys.npy", ys)
+        jnp.save(os.path.dirname(__file__) + "/data_checkpoints.npy", xs)
+        print("\nSaving successful.\n")
 
 
 def parse_arguments() -> argparse.Namespace:
     """Parse the arguments from the command line."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=int, required=True)
-    parser.add_argument("--stop", type=int, required=True)
-    parser.add_argument("--repeats", type=int, required=True)
-    parser.add_argument("--save", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--start", type=int, default=3)
+    parser.add_argument("--stop", type=int, default=10)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--nosave", action=argparse.BooleanOptionalAction)
     return parser.parse_args()
 
 
@@ -53,7 +175,6 @@ def rmse_absolute(expected: jax.Array) -> Callable:
     def rmse(received):
         received = jnp.asarray(received)
         error_absolute = jnp.abs(expected - received)
-        # error_relative = error_absolute / jnp.abs(nugget + expected)
         return jnp.linalg.norm(error_absolute) / jnp.sqrt(error_absolute.size)
 
     return rmse
@@ -85,7 +206,7 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
             precisions.append(precision)
             works_min.append(min(times))
             works_mean.append(statistics.mean(times))
-            works_std.append(statistics.stdev(times))
+            works_std.append(statistics.stdev(times) if len(times) > 1 else 0.0)
         return {
             "list_of_args": list_of_args,
             "length_of_longest_vector": jnp.asarray(lengths),
@@ -99,123 +220,4 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
 
 
 if __name__ == "__main__":
-    # Set up all the configs
-    jax.config.update("jax_enable_x64", True)
-
-    # Simulate once to get plotting code
-    vf, u0, tspan, params = ivps.rigid_body(time_span=(0.0, 50.0))
-    solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
-    ts, ys = solve(u0, params)
-
-    # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
-
-    # Read configuration from command line
-    args = parse_arguments()
-    tols_short, tols = tolerances_from_args(args)
-    time = timeit_fun_from_args(args)
-
-    # Save-at:
-    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=5)
-    dt0 = jnp.amax(ts) - jnp.amin(ts)
-
-    # Assemble algorithms
-
-    @jax.jit
-    def ts0_2(tol):
-        tol *= 100
-        u0_like = u0
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve(
-            "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def ts0_4(tol):
-        tol *= 100
-        u0_like = u0
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve(
-            "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
-
-    def ts0_2_interp(tol):
-        if tol < 1e-8:
-            tol = 1e-3
-        tol *= 100
-
-        u0_like = u0
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve_via_interpolate(
-            "ts0-2", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
-
-    def ts0_4_interp(tol):
-        if tol < 1e-8:
-            tol = 1e-3
-        tol *= 100
-
-        u0_like = u0
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve_via_interpolate(
-            "ts0-4", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def bosh3(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def tsit5(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def dopri8(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "dopri8", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol
-        )
-        return fun(u0, params)[0]
-
-    algorithms = {
-        "TS0(2) (interp., can't jit)": (tols_short, ts0_2_interp),
-        "TS0(4) (interp., can't jit)": (tols_short, ts0_4_interp),
-        "TS0(2)": (tols, ts0_2),
-        "TS0(4)": (tols, ts0_4),
-        "Bosh3()": (tols, bosh3),
-        "Tsit5()": (tols, tsit5),
-    }
-
-    # Compute a reference solution
-    reference = dopri8(1e-15)
-    precision = rmse_absolute(reference)
-
-    # Compute all work-precision diagrams
-    results = {}
-    for label, (tols, algo) in tqdm.tqdm(algorithms.items()):
-        param_to_wp = workprec(algo, precision_fun=precision, timeit_fun=time)
-        results[label] = param_to_wp(tols)
-
-    # Save results
-    if args.save:
-        jnp.save(os.path.dirname(__file__) + "/results.npy", results)
-        jnp.save(os.path.dirname(__file__) + "/plot_ts.npy", ts)
-        jnp.save(os.path.dirname(__file__) + "/plot_ys.npy", ys)
-        jnp.save(os.path.dirname(__file__) + "/plot_timeseries.npy", xs)
-        print("\nSaving successful.\n")
-    else:
-        print("\nSkipped saving.\n")
+    main()

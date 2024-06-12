@@ -95,9 +95,15 @@ def style_simple():
     def label(string, /):
         if "()" in string:
             string = string.replace("()", "")
-        if "interp." in string:
-            string = string.replace("interp.", "interpolate")
-        return string
+        if "probdiffeq" in string:
+            string = string.replace("via probdiffeq", "")
+        if "diffrax" in string:
+            string = string.replace("via diffrax", "")
+        if "TS" in string:
+            string = string.replace("TS0", "Prob")
+        if "can't" in string:
+            string = string.replace("can't", "no")
+        return string.capitalize()
 
     def linestyle(string, /):
         if "2" in string.lower():

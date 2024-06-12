@@ -204,8 +204,9 @@ def asolve_scipy(method: str, vf, /, time_span, *, atol, rtol):
         def vf_scipy(t, y):
             return vf(y, t=t, p=p)
 
+        (y0,) = u0
         solution = scipy.integrate.solve_ivp(
-            vf_scipy, y0=u0, t_span=time_span, atol=atol, rtol=rtol, method=method
+            vf_scipy, y0=y0, t_span=time_span, atol=atol, rtol=rtol, method=method
         )
         return solution.t, solution.y.T
 
