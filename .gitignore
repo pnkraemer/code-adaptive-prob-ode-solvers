@@ -1,5 +1,3 @@
-figures/
-
 # Version number
 src/**/_version.py
 
