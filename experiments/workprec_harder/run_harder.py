@@ -12,9 +12,6 @@ from odecheckpts import ivps, ivpsolvers
 
 # todo: to make offgrid_marginals() fair, split save_at from t0 and t1
 #  (save_at must be in the interior)
-# todo: give the interpolate() methods the first half of tolerances (to save time...)
-# todo: run with ts0_2
-# todo: return lengths of the vectors
 
 
 def main():
