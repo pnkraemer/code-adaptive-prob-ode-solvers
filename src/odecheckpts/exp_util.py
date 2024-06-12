@@ -6,7 +6,7 @@ from typing import Callable
 
 def plot_params():
     fontsize = fontsize_uniform(11)
-    axes_lines = axes.lines(base_width=0.25)
+    axes_lines = axes.lines(base_width=0.35)
     axes_legend = axes.legend()
     axes_grid = axes.grid()
     axes_ticks = axes.tick_direction(x="in", y="in")
@@ -85,7 +85,7 @@ def style_harder():
         color=color,
         linestyle=linestyle,
         alpha_line=None,
-        alpha_fill_between=lambda _s: 0.1,
+        alpha_fill_between=lambda _s: 0.2,
     )
 
 
@@ -117,9 +117,6 @@ def style_simple():
             return "darkorange"
         return "black"
 
-    def alpha_fill_between(_string):
-        return 0.1
-
     def linestyle(string, /):
         if "bosh3" in string.lower():
             return "dotted"
@@ -134,7 +131,7 @@ def style_simple():
         marker=marker,
         label=label,
         color=color,
-        alpha_fill_between=alpha_fill_between,
+        alpha_fill_between=lambda _s: 0.2,
         linestyle=linestyle,
-        alpha_line=lambda s: 0.9,
+        alpha_line=lambda _s: 0.99,
     )

@@ -36,7 +36,7 @@ def main():
     axes["benchmark"].set_title(r"\bf b.", loc="left", fontweight="bold")
     axes["error_vs_length"].set_title(r"\bf c.", loc="left", fontweight="bold")
 
-    plt.savefig(os.path.dirname(__file__) + "/figure.pdf")
+    plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
 
 
@@ -110,8 +110,7 @@ def plot_results_error_vs_length(axis, results):
             )
 
     axis.set_ylim((0.9, 1e4))
-    legend = axis.legend(ncols=1)
-    legend.get_frame().set_linewidth(0.5)
+    axis.legend(ncols=1)
 
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Length of solution vector")

@@ -22,7 +22,7 @@ def main():
     axes["solution"].set_title(r"\bf a.", loc="left", fontweight="bold")
     axes["benchmark"].set_title(r"\bf b.", loc="left", fontweight="bold")
 
-    plt.savefig(os.path.dirname(__file__) + "/figure.pdf")
+    plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
 
 
