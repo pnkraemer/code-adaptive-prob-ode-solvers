@@ -62,68 +62,30 @@ def main():
 
         return ts0_fun
 
-    @jax.jit
-    def bosh3(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
-        )
-        return fun(u0, params)
+    def alg_rk(m):
+        @jax.jit
+        def rk_fun(tol):
+            atol, rtol = 1e-3 * tol, tol
+            u0_like = u0
+            fun = ivpsolvers.solve_diffrax(
+                m, vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
+            )
+            return fun(u0, params)
 
-    @jax.jit
-    def dopri5(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "dopri5",
-            vf,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def tsit5(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def dopri8(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "dopri8",
-            vf,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0, params)
+        return rk_fun
 
     algorithms = {
         "Prob(3) via probdiffeq": (tols, alg_ts0(3)),
         "Prob(5) via probdiffeq": (tols, alg_ts0(5)),
         "Prob(8) via probdiffeq": (tols, alg_ts0(8)),
-        "Bosh3 via diffrax": (tols, bosh3),
-        "Tsit5  via diffrax": (tols, tsit5),
-        "Dopri8 via diffrax": (tols, dopri8),
+        "Bosh3 via diffrax": (tols, alg_rk("bosh3")),
+        "Tsit5  via diffrax": (tols, alg_rk("tsit5")),
+        "Dopri8 via diffrax": (tols, alg_rk("dopri8")),
     }
     print("\n", list(algorithms.keys()), "\n")
 
     # Compute a reference solution
-    reference, _ = dopri5(1e-15)
+    reference, _ = alg_rk("dopri5")(1e-15)
     precision = rmse_absolute(reference)
 
     # Compute all work-precision diagrams

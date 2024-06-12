@@ -62,11 +62,11 @@ def style_harder():
             return "o"
 
     def linestyle(string, /):
-        if "3" in string.lower():
+        if "2" in string.lower() or "3" in string.lower():
             return "dotted"
-        if "5" in string.lower():
+        if "4" in string.lower() or "5" in string.lower():
             return "solid"
-        if "8" in string.lower():
+        if "7" in string.lower() or "8" in string.lower():
             return "dashed"
         raise ValueError(string)
 
