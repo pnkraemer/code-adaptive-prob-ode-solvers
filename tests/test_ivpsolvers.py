@@ -36,7 +36,7 @@ def test_two_solvers_return_the_same_solution(solvers: tuple, ivp):
     dt0 = 0.1
     atol, rtol = 1e-3, 1e-3
     save_at = jnp.linspace(*time_span, num=5)
-    u0_like = u0  # infer shapes etc.
+    u0_like = u0[0]  # infer shapes etc.
 
     solve1 = solver1(vf, u0_like, save_at, dt0=dt0, atol=atol, rtol=rtol)
     solution1, aux1 = solve1(u0, args)

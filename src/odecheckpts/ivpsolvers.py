@@ -58,6 +58,9 @@ def solve(
     asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
     def solve_(u0: tuple, p, output_scale=1.0):
+        if not isinstance(u0, tuple):
+            raise ValueError("Tuple expected.")
+
         def vf_wrapped(*y, t):
             return vf(*y, t=t, p=p)
 
@@ -116,17 +119,17 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
 
     offgrid_marginals = jax.jit(solution.offgrid_marginals_searchsorted)
 
-    def solve_(u0, p):
+    def solve_(u0: tuple, p, output_scale=1.0):
+        if not isinstance(u0, tuple):
+            raise ValueError("Tuple expected.")
+
         def vf_wrapped(*y, t):
             return vf(*y, t=t, p=p)
 
         # Initial state
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
-        tcoeffs = autodiff.taylor_mode_scan(vf_auto, (u0,), num=num_derivatives)
-        output_scale = (
-            1.0 * jnp.ones(u0_like.shape) if implementation == "blockdiag" else 1.0
-        )
+        tcoeffs = autodiff.taylor_mode_scan(vf_auto, u0, num=num_derivatives)
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
         # Solve
@@ -165,10 +168,13 @@ def solve_diffrax(
     controller = diffrax.PIDController(atol=atol, rtol=rtol)
     saveat = diffrax.SaveAt(t0=False, t1=False, ts=save_at)
 
-    def solve_(u0, p):
+    def solve_(u0: tuple, p):
+        if not isinstance(u0, tuple):
+            raise ValueError("Tuple expected.")
+        (init,) = u0
         sol = diffrax.diffeqsolve(
             term,
-            y0=u0,
+            y0=init,
             args=p,
             t0=save_at[0],
             t1=save_at[-1],
@@ -191,7 +197,10 @@ def solve_diffrax(
 
 
 def asolve_scipy(method: str, vf, /, time_span, *, atol, rtol):
-    def solve_(u0, p):
+    def solve_(u0: tuple, p):
+        if not isinstance(u0, tuple):
+            raise ValueError("Tuple expected.")
+
         def vf_scipy(t, y):
             return vf(y, t=t, p=p)
 

@@ -53,15 +53,6 @@ def style_harder():
             string = string.replace("interp.", "interpolate")
         return string
 
-    def color(string, /):
-        if "3" in string:
-            return "black"
-        if "5" in string:
-            return "darkorange"
-        if "8" in string:
-            return "steelblue"
-        return "black"
-
     def marker(string, /):
         if "bosh3" in string.lower():
             return "P"
@@ -69,23 +60,24 @@ def style_harder():
             return "P"
         if "dopri8" in string.lower():
             return "P"
-        return "o"
+        raise ValueError(string)
 
     def linestyle(string, /):
-        if "bosh3" in string.lower():
+        if "3" in string.lower():
             return "dotted"
-        if "tsit5" in string.lower():
-            return "dotted"
-        if "dopri8" in string.lower():
-            return "dotted"
+        if "5" in string.lower():
+            return "solid"
+        if "8" in string.lower():
+            return "dashed"
+        raise ValueError(string)
 
     return Style(
         marker=marker,
         label=label,
-        color=color,
+        color=lambda _s: "black",
         linestyle=linestyle,
         alpha_line=None,
-        alpha_fill_between=lambda _s: 0.2,
+        alpha_fill_between=lambda _s: 0.0,
     )
 
 
@@ -93,11 +85,12 @@ def style_simple():
     def marker(string, /):
         if "can't" in string.lower() or "interp" in string.lower():
             return "^"
-        if "bosh3" in string.lower():
+        if "ts" in string.lower():
+            return "o"
+        if "bosh3" in string.lower() or "tsit5" in string.lower():
             return "s"
-        if "tsit5" in string.lower():
-            return "s"
-        return "o"
+
+        raise ValueError(string)
 
     def label(string, /):
         if "()" in string:
@@ -106,32 +99,24 @@ def style_simple():
             string = string.replace("interp.", "interpolate")
         return string
 
-    def color(string, /):
-        if "2" in string:
-            return "black"
-        if "4" in string:
-            return "darkorange"
-        if "bosh3" in string.lower():
-            return "black"
-        if "tsit5" in string.lower():
-            return "darkorange"
-        return "black"
-
     def linestyle(string, /):
-        if "bosh3" in string.lower():
+        if "2" in string.lower():
             return "dotted"
-        if "tsit5" in string.lower():
+        if "3" in string.lower():
             return "dotted"
-        if "can't" in string.lower():
-            return "dashed"
 
-        return "solid"
+        if "4" in string.lower():
+            return "solid"
+        if "5" in string.lower():
+            return "solid"
+
+        raise ValueError
 
     return Style(
         marker=marker,
         label=label,
-        color=color,
-        alpha_fill_between=lambda _s: 0.2,
+        color=lambda _s: "black",
+        alpha_fill_between=lambda _s: 0.0,
         linestyle=linestyle,
         alpha_line=lambda _s: 0.99,
     )

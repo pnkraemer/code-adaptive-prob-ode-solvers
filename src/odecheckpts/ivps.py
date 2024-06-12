@@ -14,7 +14,7 @@ def logistic():
         return f(u, *p)
 
     u0 = jnp.atleast_1d(u0)
-    return vf, u0, time_span, args
+    return vf, (u0,), time_span, args
 
 
 def rigid_body(*, time_span=(0.0, 10.0)):
@@ -26,7 +26,7 @@ def rigid_body(*, time_span=(0.0, 10.0)):
     def vf(u, *, t, p):
         return f(u, *p)
 
-    return vf, u0, time_span, args
+    return vf, (u0,), time_span, args
 
 
 def pleiades_1st():
@@ -41,7 +41,7 @@ def pleiades_1st():
         ddx = f(x, dx, t=t, p=p)
         return jnp.concatenate([dx, ddx])
 
-    return vf, jnp.concatenate(u0), time_span, args
+    return vf, (jnp.concatenate(u0),), time_span, args
 
 
 def pleiades_2nd():
@@ -97,7 +97,7 @@ def neural_ode_mlp(*, layer_sizes: tuple):
         return _mlp(*p, jnp.concatenate([u, t[None]]))
 
     u0 = jnp.atleast_1d(u0)
-    return vf, u0, time_span, args
+    return vf, (u0,), time_span, args
 
 
 def _mlp(params, inputs):
