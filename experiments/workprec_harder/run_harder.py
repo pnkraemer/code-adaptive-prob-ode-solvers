@@ -17,13 +17,139 @@ from odecheckpts import ivps, ivpsolvers
 # todo: return lengths of the vectors
 
 
+def main():
+    # Set up all the configs
+    jax.config.update("jax_enable_x64", True)
+
+    # Simulate once to get plotting code
+    vf, u0, tspan, params = ivps.pleiades_1st()
+    solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
+    ts, ys = solve(u0, params)
+
+    vf_2nd, u0_2nd, tspan, params = ivps.pleiades_2nd()
+
+    # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
+
+    # Read configuration from command line
+    args = parse_arguments()
+    tols_short, tols = tolerances_from_args(args)
+    time = timeit_fun_from_args(args)
+    print("\n", args, "\n")
+
+    # Save-at:
+    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=50)
+    dt0 = 0.1
+
+    # Assemble algorithms
+
+    def alg_ts0(n):
+        @jax.jit
+        def ts0_fun(tol):
+            tol *= 10
+            u0_like = u0_2nd[0]
+            atol, rtol = 1e-3 * tol, tol
+            fun = ivpsolvers.solve(
+                f"ts0-{n}",
+                vf_2nd,
+                u0_like,
+                save_at=xs,
+                dt0=dt0,
+                atol=atol,
+                rtol=rtol,
+                ode_order=2,
+            )
+            return fun(u0_2nd, params)
+
+        return ts0_fun
+
+    @jax.jit
+    def bosh3(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0
+        fun = ivpsolvers.solve_diffrax(
+            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def dopri5(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0
+        fun = ivpsolvers.solve_diffrax(
+            "dopri5",
+            vf,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def tsit5(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0
+        fun = ivpsolvers.solve_diffrax(
+            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
+        )
+        return fun(u0, params)
+
+    @jax.jit
+    def dopri8(tol):
+        atol, rtol = 1e-3 * tol, tol
+        u0_like = u0
+        fun = ivpsolvers.solve_diffrax(
+            "dopri8",
+            vf,
+            u0_like,
+            save_at=xs,
+            dt0=dt0,
+            atol=atol,
+            rtol=rtol,
+            ode_order=2,
+        )
+        return fun(u0, params)
+
+    algorithms = {
+        "Prob(3) via probdiffeq": (tols, alg_ts0(3)),
+        "Prob(5) via probdiffeq": (tols, alg_ts0(5)),
+        "Prob(8) via probdiffeq": (tols, alg_ts0(8)),
+        "Bosh3 via diffrax": (tols, bosh3),
+        "Tsit5  via diffrax": (tols, tsit5),
+        "Dopri8 via diffrax": (tols, dopri8),
+    }
+    print("\n", list(algorithms.keys()), "\n")
+
+    # Compute a reference solution
+    reference, _ = dopri5(1e-15)
+    precision = rmse_absolute(reference)
+
+    # Compute all work-precision diagrams
+    results = {}
+    for label, (tols, algo) in tqdm.tqdm(algorithms.items()):
+        param_to_wp = workprec(algo, precision_fun=precision, timeit_fun=time)
+        results[label] = param_to_wp(tols)
+
+    # Save results
+    if args.nosave:
+        print("\nSkipped saving.\n")
+    else:
+        jnp.save(os.path.dirname(__file__) + "/data_results.npy", results)
+        jnp.save(os.path.dirname(__file__) + "/data_ts.npy", ts)
+        jnp.save(os.path.dirname(__file__) + "/data_ys.npy", ys)
+        jnp.save(os.path.dirname(__file__) + "/data_checkpoints.npy", xs)
+        print("\nSaving successful.\n")
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse the arguments from the command line."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--start", type=int, required=True)
-    parser.add_argument("--stop", type=int, required=True)
-    parser.add_argument("--repeats", type=int, required=True)
-    parser.add_argument("--save", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--start", type=int, default=3)
+    parser.add_argument("--stop", type=int, default=10)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--nosave", action=argparse.BooleanOptionalAction)
     return parser.parse_args()
 
 
@@ -100,155 +226,4 @@ def workprec(fun, *, precision_fun: Callable, timeit_fun: Callable) -> Callable:
 
 
 if __name__ == "__main__":
-    # Set up all the configs
-    jax.config.update("jax_enable_x64", True)
-
-    # Simulate once to get plotting code
-    vf, u0, tspan, params = ivps.pleiades_1st()
-    solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
-    ts, ys = solve(u0, params)
-
-    vf_2nd, u0_2nd, tspan, params = ivps.pleiades_2nd()
-
-    # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
-
-    # Read configuration from command line
-    args = parse_arguments()
-    tols_short, tols = tolerances_from_args(args)
-    time = timeit_fun_from_args(args)
-
-    # Save-at:
-    xs = jnp.linspace(jnp.amin(ts), jnp.amax(ts), num=50)
-    dt0 = 0.1
-
-    # Assemble algorithms
-
-    @jax.jit
-    def ts0_3(tol):
-        tol *= 10
-        u0_like = u0_2nd[0]
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve(
-            "ts0-3",
-            vf_2nd,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0_2nd, params)
-
-    @jax.jit
-    def ts0_8(tol):
-        tol *= 10
-        u0_like = u0_2nd[0]
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve(
-            "ts0-8",
-            vf_2nd,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0_2nd, params)
-
-    @jax.jit
-    def ts0_5(tol):
-        tol *= 10
-        u0_like = u0_2nd[0]
-        atol, rtol = 1e-3 * tol, tol
-        fun = ivpsolvers.solve(
-            "ts0-5",
-            vf_2nd,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0_2nd, params)
-
-    @jax.jit
-    def bosh3(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "bosh3", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def dopri5(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "dopri5",
-            vf,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def tsit5(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "tsit5", vf, u0_like, save_at=xs, dt0=dt0, atol=atol, rtol=rtol, ode_order=2
-        )
-        return fun(u0, params)
-
-    @jax.jit
-    def dopri8(tol):
-        atol, rtol = 1e-3 * tol, tol
-        u0_like = u0
-        fun = ivpsolvers.solve_diffrax(
-            "dopri8",
-            vf,
-            u0_like,
-            save_at=xs,
-            dt0=dt0,
-            atol=atol,
-            rtol=rtol,
-            ode_order=2,
-        )
-        return fun(u0, params)
-
-    algorithms = {
-        "TS0(3)": (tols, ts0_3),
-        "TS0(5)": (tols, ts0_5),
-        "TS0(8)": (tols, ts0_8),
-        "Bosh3()": (tols, bosh3),
-        "Tsit5()": (tols, tsit5),
-        "Dopri8()": (tols, dopri8),
-    }
-
-    # Compute a reference solution
-    reference, _ = dopri5(1e-15)
-    precision = rmse_absolute(reference)
-
-    # Compute all work-precision diagrams
-    results = {}
-    for label, (tols, algo) in tqdm.tqdm(algorithms.items()):
-        param_to_wp = workprec(algo, precision_fun=precision, timeit_fun=time)
-        results[label] = param_to_wp(tols)
-
-    # Save results
-    if args.save:
-        jnp.save(os.path.dirname(__file__) + "/results.npy", results)
-        jnp.save(os.path.dirname(__file__) + "/plot_ts.npy", ts)
-        jnp.save(os.path.dirname(__file__) + "/plot_ys.npy", ys)
-        jnp.save(os.path.dirname(__file__) + "/plot_timeseries.npy", xs)
-        print("\nSaving successful.\n")
-    else:
-        print("\nSkipped saving.\n")
+    main()

@@ -28,45 +28,32 @@ def main():
 
 def load_results():
     """Load the results from a file."""
-    return jnp.load(os.path.dirname(__file__) + "/results.npy", allow_pickle=True)[()]
+    data = jnp.load(os.path.dirname(__file__) + "/data_results.npy", allow_pickle=True)
+    return data[()]
 
 
 def load_solution():
     """Load the solution-to-be-plotted from a file."""
-    ts = jnp.load(os.path.dirname(__file__) + "/plot_ts.npy")
-    ys = jnp.load(os.path.dirname(__file__) + "/plot_ys.npy")
+    ts = jnp.load(os.path.dirname(__file__) + "/data_ts.npy")
+    ys = jnp.load(os.path.dirname(__file__) + "/data_ys.npy")
     return ts, ys
-
-
-def load_timeseries():
-    return jnp.load(os.path.dirname(__file__) + "/plot_timeseries.npy")
 
 
 def plot_results(axis, results):
     axis.set_title("Work versus precision")
     for label, wp in results.items():
         precision = wp["precision"]
-        work_mean, work_std = (wp["work_mean"], wp["work_std"])
-        range_lower, range_upper = work_mean - work_std, work_mean + work_std
+        work = wp["work_min"]
 
         axis.loglog(
             precision,
-            work_mean,
+            work,
             label=STYLE.label(label),
             color=STYLE.color(label),
             marker=STYLE.marker(label),
             linestyle=STYLE.linestyle(label),
         )
 
-        axis.fill_between(
-            precision,
-            range_lower,
-            range_upper,
-            color=STYLE.color(label),
-            alpha=STYLE.alpha_fill_between(label),
-        )
-
-    # axis.set_ylim((1.1e-5, 1e1))
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid()

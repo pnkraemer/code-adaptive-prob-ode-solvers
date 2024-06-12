@@ -49,18 +49,17 @@ def style_harder():
     def label(string, /):
         if "()" in string:
             string = string.replace("()", "")
-        if "interp." in string:
-            string = string.replace("interp.", "interpolate")
+        if "probdiffeq" in string:
+            string = string.replace(" via probdiffeq", "")
+        if "diffrax" in string:
+            string = string.replace(" via diffrax", "")
         return string
 
     def marker(string, /):
-        if "bosh3" in string.lower():
+        if "diffrax" in string.lower():
             return "P"
-        if "tsit5" in string.lower():
-            return "P"
-        if "dopri8" in string.lower():
-            return "P"
-        raise ValueError(string)
+        if "prob" in string.lower():
+            return "o"
 
     def linestyle(string, /):
         if "3" in string.lower():
