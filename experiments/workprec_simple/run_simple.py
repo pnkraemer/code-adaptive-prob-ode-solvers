@@ -109,10 +109,10 @@ def main():
         return fun(u0, params)[0]
 
     algorithms = {
-        "TS0(2) (interpolate, can't jit) via probdiffeq": (tols_short, ts0_2_interp),
-        "TS0(4) (interpolate, can't jit) via probdiffeq": (tols_short, ts0_4_interp),
-        "TS0(2) via probdiffeq": (tols, ts0_2),
-        "TS0(4) via probdiffeq": (tols, ts0_4),
+        "TS0(2) (jit step) via probdiffeq": (tols_short, ts0_2_interp),
+        "TS0(4) (jit step) via probdiffeq": (tols_short, ts0_4_interp),
+        "TS0(2) (jit loop) via probdiffeq": (tols, ts0_2),
+        "TS0(4) (jit loop) via probdiffeq": (tols, ts0_4),
         "Bosh3() via diffrax": (tols, bosh3),
         "Tsit5() via diffrax": (tols, tsit5),
     }

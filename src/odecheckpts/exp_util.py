@@ -82,11 +82,11 @@ def style_harder():
 
 def style_simple():
     def marker(string, /):
-        if "can't" in string.lower() or "interp" in string.lower():
+        if "step" in string.lower():
             return "^"
-        if "ts" in string.lower():
+        if "loop" in string.lower():
             return "o"
-        if "bosh3" in string.lower() or "tsit5" in string.lower():
+        if "diffrax" in string.lower():
             return "s"
 
         raise ValueError(string)
