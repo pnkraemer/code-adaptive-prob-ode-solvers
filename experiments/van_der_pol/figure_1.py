@@ -18,61 +18,95 @@ def main():
     vf, (u0, du0), (t0, t1) = problem_van_der_pol()
     init, solver = solver_ts1(vf, (u0, du0), t0)
 
-    ref = solve_adaptive(vf, init, (t0, t1), solver, tol=1e-5)
-
     # Pre-compile and compute error
-    asol = solve_adaptive(vf, init, (t0, t1), solver, tol=1e-3)
-    aerror = jnp.linalg.norm(ref.u[-1] - asol.u[-1])
+    _, asol_u = solve_adaptive(vf, init, (t0, t1), solver, tol=1e-3)
 
     # Execute and benchmark
     time_ = time.perf_counter()
-    asol = solve_adaptive(vf, init, (t0, t1), solver, tol=1e-3)
-    asol.u.block_until_ready()
+    asol_t, asol_u = solve_adaptive(vf, init, (t0, t1), solver, tol=1e-3)
+    asol_u.block_until_ready()
+    asol_u.block_until_ready()
     atime = time.perf_counter() - time_
 
     # Pre-compile
-    dtmin = jnp.amin(jnp.diff(asol.t)) * 2
-    fsol = solve_fixed(vf, init, (t0, t1), solver, dtmin)
-    ferror = jnp.linalg.norm(fsol.u[-1] - ref.u[-1])
+    dtmin = jnp.amin(jnp.diff(asol_t))
+    _ = solve_fixed(vf, init, (t0, t1), solver, dtmin)
 
     # Execute and benchmark
     time_ = time.perf_counter()
-    fsol = solve_fixed(vf, init, (t0, t1), solver, dtmin)
-    fsol.u.block_until_ready()
+    fsol_t, fsol_u = solve_fixed(vf, init, (t0, t1), solver, dtmin)
+    fsol_t.block_until_ready()
+    fsol_u.block_until_ready()
     ftime = time.perf_counter() - time_
 
     fig, ax = plt.subplots(figsize=(5, 3), constrained_layout=True)
     ax.semilogy(
-        asol.t[:-1],
-        jnp.diff(asol.t),
+        asol_t[:-1],
+        jnp.diff(asol_t),
         linestyle="-",
-        marker=".",
+        markersize=0.25,
         color="C0",
-        label=f"{atime:.1f} s, {aerror:.0e} e",
     )
     ax.semilogy(
-        asol.t[:-1],
-        dtmin * jnp.ones_like(asol.t[:-1]),
+        fsol_t[:-1],
+        jnp.diff(fsol_t),
         linestyle="-",
-        marker=".",
+        markersize=0.25,
         color="C1",
-        label=f"{ftime:.1f} s, {ferror:.0e} e",
     )
-    ax.legend()
-
-    ax.annotate(f"Runtime: {atime:.1f} s", (asol.t[0], jnp.diff(asol.t)[0]), color="C0")
-    ax.annotate(f"Error: {aerror:.0e}", (asol.t[-1], jnp.diff(asol.t)[-1]), color="C0")
-    ax.set_xlabel(r"Time $t$ ($\rightarrow$ input of ODE)")
+    ax.annotate(
+        f"Runtime: {atime:.1f} s",
+        xy=(1.5, 2e-2),
+        xytext=(0, 2e-1),
+        arrowprops=dict(arrowstyle="->", color="C0"),
+        color="C0",
+        horizontalalignment="left",
+        verticalalignment="bottom",
+    )
+    ax.annotate(
+        f"{len(asol_t)} steps",
+        xy=(3.75, 4e-2),
+        xytext=(4, 2e-1),
+        arrowprops=dict(arrowstyle="->", color="C0"),
+        color="C0",
+        horizontalalignment="left",
+        verticalalignment="bottom",
+    )
+    ax.annotate(
+        f"Runtime: {ftime:.1f} s",
+        xy=(1.25, 6e-6),
+        xytext=(2, 1e-6),
+        arrowprops=dict(arrowstyle="->", color="C1"),
+        color="C1",
+        horizontalalignment="right",
+        verticalalignment="top",
+    )
+    ax.annotate(
+        f"{len(fsol_t)} steps",
+        xy=(3.15, 6e-6),
+        xytext=(4, 1e-6),
+        arrowprops=dict(arrowstyle="->", color="C1"),
+        color="C1",
+        horizontalalignment="left",
+        verticalalignment="top",
+    )
+    ax.set_xlabel(r"ODE domain (time $t$)")
     ax.set_ylabel(r"Step-size $\Delta t$")
+    ax.set_ylim((1e-7, 1e0))
     # axin1 = ax.inset_axes([0.8, 0.1, 0.15, 0.15])
     # axin1.plot(asol.t, asol.u)
+
+    filename = str(__file__)
+    filename = filename.replace("experiments/", "figures/")
+    filename = filename.replace(".py", ".pdf")
+    plt.savefig(filename)
     plt.show()
 
 
 def problem_van_der_pol():
     def vf(y, ydot, *, t):  # noqa: ARG001
         """Evaluate the vector field."""
-        return 10**2 * (ydot * (1 - y**2) - y)
+        return 10**3 * (ydot * (1 - y**2) - y)
 
     u0 = jnp.asarray([2.0])
     du0 = jnp.asarray([0.0])
@@ -102,14 +136,16 @@ def solve_adaptive(vf, init, time_span, solver, tol):
     solution = ivpsolve.solve_adaptive_save_every_step(
         vf, init, t0=t0, t1=t1, dt0=dt0, adaptive_solver=adaptive_solver
     )
-    return solution
+    return solution.t, solution.u
 
 
 def solve_fixed(vf, init, time_span, solver, dt):
     t0, t1 = time_span
     num_steps = ((t1 - t0) / dt).astype(int)
+
     grid = jnp.linspace(t0, t1, num=num_steps, endpoint=True)
-    return ivpsolve.solve_fixed_grid(vf, init, grid=grid, solver=solver)
+    sol = ivpsolve.solve_fixed_grid(vf, init, grid=grid, solver=solver)
+    return grid, sol.u
 
 
 if __name__ == "__main__":
