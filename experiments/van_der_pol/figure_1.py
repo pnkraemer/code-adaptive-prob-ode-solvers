@@ -60,7 +60,7 @@ def main():
         marker="None",
         markersize=1,
         color="C0",
-        label=f"$N$={len(grid_adaptive):,} adaptive steps run in {time_adaptive:.1f} sec",
+        label=f"$N$={len(grid_adaptive):,} adaptive steps take {time_adaptive:.1f}s",
     )
     ax.semilogy(
         grid_fixed_inaccurate[:-1],
@@ -68,7 +68,7 @@ def main():
         linestyle="dotted",
         marker="None",
         color="gray",
-        label=f"$N$={len(grid_fixed_inaccurate):,} fixed steps contain NaNs",
+        label=rf"$N$={len(grid_fixed_inaccurate):,} fixed, evenly spaced steps yield NaNs",
     )
     ax.semilogy(
         grid_fixed_accurate[:-1],
@@ -76,21 +76,28 @@ def main():
         linestyle="dashed",
         marker="None",
         color="C1",
-        label=f"$N$={len(grid_fixed_accurate):,} fixed steps run in {time_fixed_accurate:.1f} sec",
+        label=f"$N$={len(grid_fixed_accurate):,} fixed, evenly spaced steps take {time_fixed_accurate:.1f}s",
     )
-    ax.legend(loc="upper left", edgecolor="white", handlelength=1.5, fontsize="small")
+    ax.legend(loc="upper left", edgecolor="white", handlelength=1.1, fontsize="small")
     ax.set_xlabel(r"ODE domain (time $t$)")
     ax.set_ylabel(r"Step-size $\Delta t$")
-    ax.set_ylim((2e-6, 5e1))
+    ax.set_ylim((4e-6, 5e0))
     ax.set_xlim((-0.1, 6.4))
     ax.set_xticks((0, 1, 2, 3, 4, 5, 6))
 
-    axin1 = ax.inset_axes([0.8, 0.725, 0.175, 0.175])
-    axin1.set_title("VdP solution", fontsize="small")
+    axin1 = ax.inset_axes([0.8, 0.75, 0.2, 0.25])
+    axin1.set_title("VdP solution", fontsize="small", x=0.5, y=0.65)
+    axin1.set_xlim((-0.1, 6.5))
     axin1.set_xticks((0.0, 3.0, 6.0))
+    axin1.set_yticks((-2.0, 2.0))
+    axin1.set_ylim((-3, 5))
     axin1.set_yticks((-2, 2))
+    axin1.tick_params(axis="x", direction="in")
+    axin1.tick_params(axis="y", direction="in")
     axin1.plot(grid_adaptive, sol_adaptive, color="black", linewidth=0.75)
-    axin1.set_xlim((0.0, 6.3))
+
+    ax.tick_params(axis="x", direction="in")
+    ax.tick_params(axis="y", direction="in")
 
     filename = str(__file__)
     filename = filename.replace("experiments/", "figures/")
