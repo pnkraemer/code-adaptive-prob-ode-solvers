@@ -43,29 +43,30 @@ def main():
     ax.semilogy(
         asol_t[:-1],
         jnp.diff(asol_t),
-        linestyle="-",
-        markersize=0.25,
+        linestyle="None",
+        marker=".",
+        markersize=1,
         color="C0",
     )
     ax.semilogy(
         fsol_t[:-1],
         jnp.diff(fsol_t),
-        linestyle="-",
-        markersize=0.25,
+        linestyle="solid",
+        marker="None",
         color="C1",
     )
     ax.annotate(
         f"Runtime: {atime:.1f} s",
-        xy=(1.5, 2e-2),
-        xytext=(0.5, 2e-1),
+        xy=(1.5, 1e-1),
+        xytext=(0.5, 8e-1),
         arrowprops=dict(arrowstyle="->", color="C0"),
         color="C0",
         horizontalalignment="left",
         verticalalignment="bottom",
     )
     ax.annotate(
-        f"{len(asol_t)} steps",
-        xy=(2.75, 4e-2),
+        f"{len(asol_t)} adaptive steps",
+        xy=(2.75, 2e-1),
         xytext=(1.5, 1e1),
         arrowprops=dict(arrowstyle="->", color="C0"),
         color="C0",
@@ -82,7 +83,7 @@ def main():
         verticalalignment="top",
     )
     ax.annotate(
-        f"{len(fsol_t)} steps",
+        f"{len(fsol_t)} fixed steps",
         xy=(3.15, 6e-6),
         xytext=(4, 1e-6),
         arrowprops=dict(arrowstyle="->", color="C1"),
@@ -91,11 +92,11 @@ def main():
         verticalalignment="top",
     )
     ax.set_xlabel(r"ODE domain (time $t$)")
-    ax.set_ylabel(r"Step-size $\Delta t$")
+    ax.set_ylabel(r"Step-size $\Delta t$ (adaptive vs. fixed)")
     ax.set_ylim((1e-7, 1e2))
     ax.set_xlim((-0.1, 6.4))
     axin1 = ax.inset_axes([0.8, 0.725, 0.175, 0.175])
-    axin1.set_title("Van der Pol", fontsize="small")
+    axin1.set_title("VdP solution", fontsize="small")
     axin1.plot(asol_t, asol_u, color="black", linewidth=0.75)
     axin1.set_xlim((0.0, 6.3))
 
@@ -118,7 +119,7 @@ def problem_van_der_pol():
 
 
 def solver_ts1(vf, init, t0):
-    num = 4
+    num = 7
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
     ts0 = ivpsolvers.correction_ts1(ode_order=2)
     strategy = ivpsolvers.strategy_filter(ibm, ts0)
