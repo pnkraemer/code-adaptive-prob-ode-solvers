@@ -57,7 +57,7 @@ def main():
     ax.annotate(
         f"Runtime: {atime:.1f} s",
         xy=(1.5, 2e-2),
-        xytext=(0, 2e-1),
+        xytext=(0.5, 2e-1),
         arrowprops=dict(arrowstyle="->", color="C0"),
         color="C0",
         horizontalalignment="left",
@@ -65,8 +65,8 @@ def main():
     )
     ax.annotate(
         f"{len(asol_t)} steps",
-        xy=(3.75, 4e-2),
-        xytext=(4, 2e-1),
+        xy=(2.75, 4e-2),
+        xytext=(1.5, 1e1),
         arrowprops=dict(arrowstyle="->", color="C0"),
         color="C0",
         horizontalalignment="left",
@@ -92,9 +92,12 @@ def main():
     )
     ax.set_xlabel(r"ODE domain (time $t$)")
     ax.set_ylabel(r"Step-size $\Delta t$")
-    ax.set_ylim((1e-7, 1e0))
-    # axin1 = ax.inset_axes([0.8, 0.1, 0.15, 0.15])
-    # axin1.plot(asol.t, asol.u)
+    ax.set_ylim((1e-7, 1e2))
+    ax.set_xlim((-0.1, 6.4))
+    axin1 = ax.inset_axes([0.8, 0.725, 0.175, 0.175])
+    axin1.set_title("Van der Pol", fontsize="small")
+    axin1.plot(asol_t, asol_u, color="black", linewidth=0.75)
+    axin1.set_xlim((0.0, 6.3))
 
     filename = str(__file__)
     filename = filename.replace("experiments/", "figures/")
@@ -110,7 +113,7 @@ def problem_van_der_pol():
 
     u0 = jnp.asarray([2.0])
     du0 = jnp.asarray([0.0])
-    t0, t1 = 0.0, 6.1
+    t0, t1 = 0.0, 6.3
     return vf, (u0, du0), (t0, t1)
 
 
