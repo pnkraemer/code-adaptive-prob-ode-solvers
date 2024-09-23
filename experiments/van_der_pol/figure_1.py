@@ -7,6 +7,9 @@ import time
 
 from probdiffeq import ivpsolve, ivpsolvers, taylor
 from probdiffeq.impl import impl
+from tueplots import axes
+
+plt.rcParams.update(axes.legend())
 
 
 def main():
@@ -43,60 +46,32 @@ def main():
     ax.semilogy(
         asol_t[:-1],
         jnp.diff(asol_t),
-        linestyle="None",
-        marker=".",
+        linestyle="solid",
+        marker="None",
         markersize=1,
         color="C0",
+        label=f"$N$={len(asol_t):,} adaptive steps in {atime:.1f} sec",
     )
     ax.semilogy(
         fsol_t[:-1],
         jnp.diff(fsol_t),
-        linestyle="solid",
+        linestyle="dotted",
         marker="None",
         color="C1",
+        label=f"$N$={len(fsol_t):,} fixed steps in {ftime:.1f} sec",
     )
-    ax.annotate(
-        f"Runtime: {atime:.1f} s",
-        xy=(1.5, 1e-1),
-        xytext=(0.5, 8e-1),
-        arrowprops=dict(arrowstyle="->", color="C0"),
-        color="C0",
-        horizontalalignment="left",
-        verticalalignment="bottom",
-    )
-    ax.annotate(
-        f"{len(asol_t)} adaptive steps",
-        xy=(2.75, 2e-1),
-        xytext=(1.5, 1e1),
-        arrowprops=dict(arrowstyle="->", color="C0"),
-        color="C0",
-        horizontalalignment="left",
-        verticalalignment="bottom",
-    )
-    ax.annotate(
-        f"Runtime: {ftime:.1f} s",
-        xy=(1.25, 6e-6),
-        xytext=(2, 1e-6),
-        arrowprops=dict(arrowstyle="->", color="C1"),
-        color="C1",
-        horizontalalignment="right",
-        verticalalignment="top",
-    )
-    ax.annotate(
-        f"{len(fsol_t)} fixed steps",
-        xy=(3.15, 6e-6),
-        xytext=(4, 1e-6),
-        arrowprops=dict(arrowstyle="->", color="C1"),
-        color="C1",
-        horizontalalignment="left",
-        verticalalignment="top",
-    )
+    ax.legend(loc="upper left", edgecolor="white", handlelength=1.0, fontsize="medium")
     ax.set_xlabel(r"ODE domain (time $t$)")
-    ax.set_ylabel(r"Step-size $\Delta t$ (adaptive vs. fixed)")
-    ax.set_ylim((1e-7, 1e2))
+    ax.set_ylabel(r"Step-size $\Delta t$")
+    ax.set_ylim((2e-6, 5e1))
     ax.set_xlim((-0.1, 6.4))
+    ax.set_xticks((0, 1, 2, 3, 4, 5, 6))
+
     axin1 = ax.inset_axes([0.8, 0.725, 0.175, 0.175])
     axin1.set_title("VdP solution", fontsize="small")
+    axin1.set_xticks((0.0, 3.0, 6.0))
+    axin1.set_yticks((-2, 2))
+
     axin1.plot(asol_t, asol_u, color="black", linewidth=0.75)
     axin1.set_xlim((0.0, 6.3))
 
@@ -119,7 +94,7 @@ def problem_van_der_pol():
 
 
 def solver_ts1(vf, init, t0):
-    num = 7
+    num = 4
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
     ts0 = ivpsolvers.correction_ts1(ode_order=2)
     strategy = ivpsolvers.strategy_filter(ibm, ts0)
