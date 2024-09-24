@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from tueplots import axes
+from tueplots import axes, bundles
 import dataclasses
 
 
@@ -27,10 +27,16 @@ class Data:
 
 
 def main():
+    jax.config.update("jax_enable_x64", True)
+    plt.rcParams.update(axes.tick_direction(x="in", y="in"))
+    plt.rcParams.update(axes.lines(tick_minor_base_ratio=0.0))
     plt.rcParams.update(axes.legend())
+    plt.rcParams.update(
+        bundles.aistats2025(column="half", ncols=1, nrows=1, family="serif")
+    )
 
     filename = str(__file__)
-    filename = filename.replace("plot", "vdp")
+    filename = filename.replace("_plot", "")
 
     baseline_grid = jnp.load(filename.replace(".py", "_baseline_grid.npy"))
     baseline_solution = jnp.load(filename.replace(".py", "_baseline_solution.npy"))
@@ -39,52 +45,34 @@ def main():
     fixed_accurate = Data.load(filename, "fixed_accurate")
     fixed_inaccurate = Data.load(filename, "fixed_inaccurate")
 
-    fig, ax = plt.subplots(figsize=(5, 3), constrained_layout=True)
-    ax.semilogy(
-        adaptive.grid[:-1],
-        adaptive.steps,
-        linestyle="solid",
-        marker="None",
-        markersize=1,
-        color="C0",
-        label=f"$N$={adaptive.num_steps:,} adaptive steps take {adaptive.runtime:.1f}s",
-    )
+    fig, ax = plt.subplots(dpi=200)
+    label = f"$N={adaptive.num_steps:,}$ adaptive steps take {adaptive.runtime:.2f}s"
+    ax.semilogy(adaptive.grid[:-1], adaptive.steps, linestyle="solid", label=label)
+    label = rf"$N={fixed_inaccurate.num_steps:,}$ fixed steps yield NaNs"
     ax.semilogy(
         fixed_inaccurate.grid[:-1],
         fixed_inaccurate.steps,
-        linestyle="dotted",
-        marker="None",
-        color="gray",
-        label=rf"$N$={fixed_inaccurate.num_steps:,} fixed, evenly spaced steps yield NaNs",
-    )
-    ax.semilogy(
-        fixed_accurate.grid[:-1],
-        fixed_accurate.steps,
         linestyle="dashed",
-        marker="None",
-        color="C1",
-        label=f"$N$={fixed_accurate.num_steps:,} fixed, evenly spaced steps take {fixed_accurate.runtime:.1f}s",
+        label=label,
     )
-    ax.legend(loc="upper left", edgecolor="white", handlelength=1.1, fontsize="small")
-    ax.set_xlabel(r"ODE domain (time $t$)")
+    label = f"$N={fixed_accurate.num_steps:,}$ fixed steps take {fixed_accurate.runtime:.2f}s"
+    ax.semilogy(
+        fixed_accurate.grid[:-1], fixed_accurate.steps, linestyle="dotted", label=label
+    )
+    ax.legend(loc="upper left", fontsize="xx-small")
     ax.set_ylabel(r"Step-size $\Delta t$")
     ax.set_ylim((4e-6, 5e0))
-    ax.set_xlim((-0.1, 6.4))
-    ax.set_xticks((0, 1, 2, 3, 4, 5, 6))
+    ax.set_xlabel(r"ODE domain (which is the time $t$)")
 
     axin1 = ax.inset_axes([0.8, 0.75, 0.2, 0.25])
-    axin1.set_title("VdP solution", fontsize="small", x=0.5, y=0.65)
-    axin1.set_xlim((-0.1, 6.5))
-    axin1.set_xticks((0.0, 3.0, 6.0))
-    axin1.set_yticks((-2.0, 2.0))
-    axin1.set_ylim((-3, 5))
+    axin1.set_title("VdP sol.", fontsize="x-small", x=0.5, y=0.57)
+    axin1.set_ylim((-4, 6))
     axin1.set_yticks((-2, 2))
-    axin1.tick_params(axis="x", direction="in")
-    axin1.tick_params(axis="y", direction="in")
     axin1.plot(baseline_grid, baseline_solution, color="black", linewidth=0.75)
 
-    ax.tick_params(axis="x", direction="in")
-    ax.tick_params(axis="y", direction="in")
+    for a in [ax, axin1]:
+        a.set_xlim((-0.1, 6.4))
+        a.set_xticks((0, 2, 4, 6))
 
     filename = str(__file__)
     filename = filename.replace("experiments/", "figures/")
