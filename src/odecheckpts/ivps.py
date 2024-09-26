@@ -109,7 +109,7 @@ def _mlp(params, inputs):
     return outputs
 
 
-def brusselator(N=20, t0=0.0, tmax=10.0):
+def brusselator(N, t0=0.0, tmax=10.0):
     """Brusselator as in https://uk.mathworks.com/help/matlab/math/solve-stiff-odes.html.
     N=20 is the same default as in Matlab.
     """
@@ -117,6 +117,7 @@ def brusselator(N=20, t0=0.0, tmax=10.0):
     const = alpha * (N + 1) ** 2
     weights = jnp.array([1.0, -2.0, 1.0])
 
+    @jax.jit
     def f(y, *, t, p, n=N, w=weights, c=const):
         """Evaluate the Brusselator RHS via jnp.convolve, which is equivalent to multiplication with a banded matrix."""
         u, v = y[:n], y[n:]
@@ -133,7 +134,10 @@ def brusselator(N=20, t0=0.0, tmax=10.0):
         v_new = 3 * u - u**2 * v + c * conv_v
         return jnp.concatenate([u_new, v_new])
 
-    u0 = jnp.arange(1, N + 1) / N + 1
+    x0 = jnp.linspace(0, 1, num=N)
+    u0 = jnp.sin(2 * jnp.pi * x0) + 1
+    # y0 = [1 + sin((2 * pi / (N + 1)) * (1:N)
+    # u0 = jnp.sin(2*jnp.pi*jnp.arange(1, N + 1)) / N + 1
     v0 = 3.0 * jnp.ones(N)
     y0 = jnp.concatenate([u0, v0])
 
