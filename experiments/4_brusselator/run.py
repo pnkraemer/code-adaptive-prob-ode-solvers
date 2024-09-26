@@ -2,7 +2,9 @@ import matplotlib.pyplot as plt
 
 import jax
 
-from odecheckpts import ivps, ivpsolvers
+from odecheckpts import ivps
+from probdiffeq import ivpsolve, ivpsolvers, taylor
+from probdiffeq.impl import impl
 
 import jax.numpy as jnp
 from odecheckpts import exp_util
@@ -14,10 +16,30 @@ def main():
     plt.rcParams.update(exp_util.plot_params())
 
     # Simulate once to get plotting code
-    N = 100
-    vf, u0, tspan, params = ivps.brusselator(N=N)
-    solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
-    ts, ys = solve(u0, params)
+    N = 10
+    vf, u0, (t0, t1), params = ivps.brusselator(N=N)
+
+    # Set up the solver
+    impl.select("dense", ode_shape=(2 * N,))
+    num = 4
+    ibm = ivpsolvers.prior_ibm(num_derivatives=num)
+    ts0 = ivpsolvers.correction_ts1(ode_order=1)
+    strategy = ivpsolvers.strategy_filter(ibm, ts0)
+    solver = ivpsolvers.solver_dynamic(strategy)
+
+    # Set up the initial condition
+    tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0, p=params), u0, num=num)
+    output_scale = 1.0  # or any other value with the same shape
+    init = solver.initial_condition(tcoeffs, output_scale)
+
+    # Compute a baseline solution
+    tol = 1e-3
+    ctrl = ivpsolve.control_proportional_integral()
+    adaptive_solver = ivpsolve.adaptive(solver, atol=tol, rtol=tol, control=ctrl)
+    solution = ivpsolve.solve_adaptive_save_every_step(
+        vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
+    )
+    ts, ys = solution.t, solution.u
 
     Us, Vs = jnp.split(ys, axis=1, indices_or_sections=2)
     xs = jnp.linspace(0, 1, endpoint=True, num=len(u0[0]) // 2)

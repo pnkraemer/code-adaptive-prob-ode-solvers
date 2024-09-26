@@ -118,7 +118,7 @@ def brusselator(N, t0=0.0, tmax=10.0):
     weights = jnp.array([1.0, -2.0, 1.0])
 
     @jax.jit
-    def f(y, *, t, p, n=N, w=weights, c=const):
+    def f(y, *, t, p=(), n=N, w=weights, c=const):
         """Evaluate the Brusselator RHS via jnp.convolve, which is equivalent to multiplication with a banded matrix."""
         u, v = y[:n], y[n:]
 
