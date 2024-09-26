@@ -58,7 +58,7 @@ if __name__ == "__main__":
     ax["complexity"].axhline(8_000, color="black", linestyle="dotted")
     ax["complexity"].annotate(
         r"Machine limit ($\approx$ 8 GB)",
-        xy=(2, 9_000),
+        xy=(10, 9_000),
         color="black",
         fontsize="small",
         zorder=0,
