@@ -5,7 +5,7 @@ from typing import Callable
 
 
 def plot_params():
-    fontsize = fontsize_uniform(11)
+    fontsize = fontsize_uniform(9)
     axes_lines = axes.lines(base_width=0.35)
     axes_legend = axes.legend()
     axes_grid = axes.grid()

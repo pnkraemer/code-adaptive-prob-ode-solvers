@@ -2,8 +2,9 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from tueplots import axes, bundles
 import dataclasses
+
+from odecheckpts import exp_util
 
 
 @dataclasses.dataclass
@@ -27,25 +28,23 @@ class Data:
 
 
 def main():
+    # Otherwise, the small step-sizes are clipped during "jnp.diff".
     jax.config.update("jax_enable_x64", True)
-    plt.rcParams.update(axes.tick_direction(x="in", y="in"))
-    plt.rcParams.update(axes.lines(tick_minor_base_ratio=0.0))
-    plt.rcParams.update(axes.legend())
-    plt.rcParams.update(
-        bundles.aistats2025(column="half", ncols=1, nrows=1, family="serif")
-    )
 
+    # Load the data
     filename = str(__file__)
     filename = filename.replace("_plot", "")
-
     baseline_grid = jnp.load(filename.replace(".py", "_baseline_grid.npy"))
     baseline_solution = jnp.load(filename.replace(".py", "_baseline_solution.npy"))
-
     adaptive = Data.load(filename, "adaptive")
     fixed_accurate = Data.load(filename, "fixed_accurate")
     fixed_inaccurate = Data.load(filename, "fixed_inaccurate")
 
-    fig, ax = plt.subplots(dpi=200)
+    # Make all plots look similar
+    plt.rcParams.update(exp_util.plot_params())
+    fig, ax = plt.subplots(dpi=100, figsize=(3.25, 2.0))  # 3.25: half-page
+
+    # Plot the three curves
     label = f"$N={adaptive.num_steps:,}$ adaptive steps take {adaptive.runtime:.2f}s"
     ax.semilogy(adaptive.grid[:-1], adaptive.steps, linestyle="solid", label=label)
     label = rf"$N={fixed_inaccurate.num_steps:,}$ fixed steps yield NaNs"
@@ -59,21 +58,27 @@ def main():
     ax.semilogy(
         fixed_accurate.grid[:-1], fixed_accurate.steps, linestyle="dotted", label=label
     )
+
+    # Style legend, axes, etc.
     ax.legend(loc="upper left", fontsize="xx-small")
     ax.set_ylabel(r"Step-size $\Delta t$")
     ax.set_ylim((4e-6, 5e0))
-    ax.set_xlabel(r"ODE domain (which is the time $t$)")
+    ax.set_xlabel(r"ODE domain (time $t$)")
+    ax.set_title("a) Step-size evolution during the simulation")
 
+    # Insert the ODE solution
     axin1 = ax.inset_axes([0.8, 0.75, 0.2, 0.25])
-    axin1.set_title("VdP sol.", fontsize="x-small", x=0.5, y=0.57)
+    axin1.set_title("b) VdP sol.", fontsize="x-small", x=0.5, y=0.5)
     axin1.set_ylim((-4, 6))
     axin1.set_yticks((-2, 2))
     axin1.plot(baseline_grid, baseline_solution, color="black", linewidth=0.75)
 
+    # Make the xticks match between both plots
     for a in [ax, axin1]:
         a.set_xlim((-0.1, 6.4))
         a.set_xticks((0, 2, 4, 6))
 
+    # Save the plot to a file
     filename = str(__file__)
     filename = filename.replace("experiments/", "figures/")
     filename = filename.replace(".py", ".pdf")
