@@ -107,3 +107,34 @@ def _mlp(params, inputs):
         outputs = jnp.dot(inputs, w) + b
         inputs = jax.nn.tanh(outputs)
     return outputs
+
+
+def brusselator(N=20, t0=0.0, tmax=10.0):
+    """Brusselator as in https://uk.mathworks.com/help/matlab/math/solve-stiff-odes.html.
+    N=20 is the same default as in Matlab.
+    """
+    alpha = 1.0 / 50.0
+    const = alpha * (N + 1) ** 2
+    weights = jnp.array([1.0, -2.0, 1.0])
+
+    def f(y, *, t, p, n=N, w=weights, c=const):
+        """Evaluate the Brusselator RHS via jnp.convolve, which is equivalent to multiplication with a banded matrix."""
+        u, v = y[:n], y[n:]
+
+        # Compute (1, -2, 1)-weighted average with boundary behaviour as in the Matlab link above.
+        u_pad = jnp.array([1.0])
+        v_pad = jnp.array([3.0])
+        u_ = jnp.concatenate([u_pad, u, u_pad])
+        v_ = jnp.concatenate([v_pad, v, v_pad])
+        conv_u = jnp.convolve(u_, w, mode="valid")
+        conv_v = jnp.convolve(v_, w, mode="valid")
+
+        u_new = 1.0 + u**2 * v - 4 * u + c * conv_u
+        v_new = 3 * u - u**2 * v + c * conv_v
+        return jnp.concatenate([u_new, v_new])
+
+    u0 = jnp.arange(1, N + 1) / N + 1
+    v0 = 3.0 * jnp.ones(N)
+    y0 = jnp.concatenate([u0, v0])
+
+    return f, (y0,), (t0, tmax), ()
