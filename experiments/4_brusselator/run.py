@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-
+import warnings
 import jax
 import jax.flatten_util
 
@@ -35,43 +35,49 @@ def main():
     #
     #     print(N, 8 * 1024**3 / jax.flatten_util.ravel_pytree(init)[0].nbytes, "copies fit in memory")
 
-    N = 10
-    vf, u0, (t0, t1), params = ivps.brusselator(N=N)
+    for N in [4, 12, 20, 28, 32]:
+        vf, u0, (t0, t1), params = ivps.brusselator(N=N)
 
-    # Set up the solver
-    impl.select("dense", ode_shape=(2 * N,))
-    num = 4
-    ibm = ivpsolvers.prior_ibm(num_derivatives=num)
-    ts0 = ivpsolvers.correction_ts1(ode_order=1)
-    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
-    solver = ivpsolvers.solver_dynamic(strategy)
+        # Set up the solver
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            impl.select("dense", ode_shape=(2 * N,))
 
-    # Set up the initial condition
-    tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0, p=params), u0, num=num)
-    output_scale = 1.0  # or any other value with the same shape
-    init = solver.initial_condition(tcoeffs, output_scale)
+        num = 4
+        ibm = ivpsolvers.prior_ibm(num_derivatives=num)
+        ts0 = ivpsolvers.correction_ts1(ode_order=1)
+        strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
+        solver = ivpsolvers.solver_dynamic(strategy)
 
-    tol = 1e-8
-    ctrl = ivpsolve.control_proportional_integral()
-    adaptive_solver = ivpsolve.adaptive(solver, atol=tol, rtol=tol, control=ctrl)
+        # Set up the initial condition
+        tcoeffs = taylor.odejet_padded_scan(
+            lambda *y: vf(*y, t=t0, p=params), u0, num=num
+        )
+        output_scale = 1.0  # or any other value with the same shape
+        init = solver.initial_condition(tcoeffs, output_scale)
 
-    # 8 GB of memory / size of initial condition.
-    # Note: adaptive steps carry around three copies
-    ncopies = 8 * 1024**3 / jax.flatten_util.ravel_pytree(init)[0].nbytes
-    msg = (
-        f"\nFor N={N}, {int(ncopies):,} copies of the initial condition fit in memory."
-    )
-    print(msg)
+        tol = 1e-8
+        ctrl = ivpsolve.control_proportional_integral()
+        adaptive_solver = ivpsolve.adaptive(solver, atol=tol, rtol=tol, control=ctrl)
 
-    solution = ivpsolve.solve_adaptive_terminal_values(
-        vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
-    )
-    ncopies = (
-        solution.num_steps * jax.flatten_util.ravel_pytree(init)[0].nbytes / 1024**2
-    )
+        # 8 GB of memory / size of initial condition.
+        # Note: adaptive steps carry around three copies
+        print(f"\nFor N={N}:")
+        size_init = 3 * jax.flatten_util.ravel_pytree(init)[0].nbytes
+        ncopies = 8 * 1024**3 / size_init
+        msg = f"\t{int(ncopies):,} copies of the initial condition fit in memory."
+        print(msg)
 
-    msg = f"For N={N}, {int(solution.num_steps):,} steps ({int(ncopies):,} MB) were used.\n"
-    print(msg)
+        # Use simulate_terminal_values to see how many steps will be taken
+        # without crashing the machine.
+        solution = ivpsolve.solve_adaptive_terminal_values(
+            vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
+        )
+        ncopies = solution.num_steps * size_init / 1024**2
+        msg = f"\t{int(solution.num_steps):,} steps ({int(ncopies):,} MB) were taken.\n"
+        print(msg)
+        if ncopies > 2_000:
+            break
 
     assert False
     # Compute a baseline solution
