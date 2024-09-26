@@ -8,6 +8,10 @@ import dataclasses
 
 from odecheckpts import exp_util
 
+raise RuntimeError(
+    "in the data generation, prefix the data files with data_* instead of vdp_*"
+)
+
 
 @dataclasses.dataclass
 class Data:

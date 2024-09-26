@@ -71,13 +71,30 @@ def style_harder():
             return "dashed"
         raise ValueError(string)
 
+    def color(string, /):
+        if "prob" in string.lower():
+            return "C0"
+        if "diffrax" in string.lower():
+            return "C1"
+
+        raise ValueError(string)
+
+    def zorder(string, /):
+        if "prob" in string.lower():
+            return 1
+        if "diffrax" in string.lower():
+            return 0
+
+        raise ValueError(string)
+
     return Style(
         marker=marker,
         label=label,
-        color=lambda _s: "black",
+        color=color,
         linestyle=linestyle,
         alpha_line=None,
         alpha_fill_between=lambda _s: 0.0,
+        zorder=zorder,
     )
 
 
