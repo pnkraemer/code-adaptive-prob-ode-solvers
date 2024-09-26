@@ -37,17 +37,8 @@ def main():
         "num_steps": [],
     }
 
-    # todo:
-    # - store all results: runtime, memory, N, solution-values
-    # - move plotting to a separate file
-    Nranges = [2, 4, 8, 16, 32, 64]  # works reasonably well
-    Nranges = [
-        10,
-        30,
-        50,
-        70,
-    ]  # try this; with N>=50, the pcolormesh will even look decent.
-    Nranges = [2, 3, 4]
+    Nranges = [10, 30, 50, 70]  # with N>=50, the pcolormesh will even look decent.
+    Nranges = [2, 4, 6, 8, 10]
     for N in Nranges:
         # Set up the problem
         vf, u0, (t0, t1), params = ivps.brusselator(N=N)
@@ -127,6 +118,7 @@ def main():
         results_checkpoint["ts"].append(solution.t)
         results_checkpoint["ys"].append(solution.u)
         results_checkpoint["num_steps"].append(jnp.amax(solution.num_steps))
+    print()
 
     jnp.save(
         os.path.dirname(__file__) + "/data_checkpoint.npy",
@@ -138,41 +130,6 @@ def main():
         results_textbook,
         allow_pickle=True,
     )
-
-    assert False
-    print("\n")
-
-    # # Compute a baseline solution
-    # solution = ivpsolve.solve_adaptive_save_every_step(
-    #     vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
-    # )
-    ts, ys = solution.t, solution.u
-
-    Us, Vs = jnp.split(ys, axis=1, indices_or_sections=2)
-    xs = jnp.linspace(0, 1, endpoint=True, num=len(u0[0]) // 2)
-    Xs, Ts = jnp.meshgrid(xs, ts)
-
-    fig, ax = plt.subplots(figsize=(3.25, 2.5), dpi=200)
-    ax.pcolormesh(Xs, Ts, Us)
-
-    ax.set_xlabel("Space $x$")
-    ax.set_ylabel("Time $t$ (steps are marked)")
-    msg = f"$N={len(ts):,}$ target points, $M={int(jnp.amax(solution.num_steps)):,}$ compute points"
-    ax.set_title(msg)
-    ax.set_yticks(ts[::20])
-    ax.set_yticklabels(())
-    ax.tick_params(which="both", direction="out")
-    plt.show()
-
-    #
-    # fig = plt.figure(figsize=(3.25, 2.5))
-    # ax = fig.add_subplot(111, projection='3d')
-    # ax.plot_surface(Xs, Ts, Us)
-    # ax.set_xlabel("Space $X$")
-    # ax.set_ylabel("Time $t$")
-    # ax.set_zlabel("Solution $u$")
-
-    plt.show()
 
 
 if __name__ == "__main__":
