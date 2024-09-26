@@ -43,6 +43,7 @@ class Style:
     linestyle: Callable[[str], str]
     alpha_line: Callable[[str], float]
     alpha_fill_between: Callable[[str], float]
+    zorder: Callable[[str], int]
 
 
 def style_harder():
@@ -91,6 +92,26 @@ def style_simple():
 
         raise ValueError(string)
 
+    def color(string, /):
+        if "step" in string.lower():
+            return "C0"
+        if "loop" in string.lower():
+            return "C1"
+        if "diffrax" in string.lower():
+            return "C2"
+
+        raise ValueError(string)
+
+    def zorder(string, /):
+        if "step" in string.lower():
+            return 1
+        if "loop" in string.lower():
+            return 2
+        if "diffrax" in string.lower():
+            return 0
+
+        raise ValueError(string)
+
     def label(string, /):
         if "()" in string:
             string = string.replace("()", "")
@@ -120,8 +141,9 @@ def style_simple():
     return Style(
         marker=marker,
         label=label,
-        color=lambda _s: "black",
+        color=color,
         alpha_fill_between=lambda _s: 0.0,
         linestyle=linestyle,
         alpha_line=lambda _s: 0.99,
+        zorder=zorder,
     )

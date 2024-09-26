@@ -8,12 +8,8 @@ import jax
 import jax.numpy as jnp
 import scipy.integrate
 
-from probdiffeq import adaptive, controls, ivpsolve
+from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.impl import impl
-from probdiffeq.solvers import calibrated, markov, solution, uncalibrated
-from probdiffeq.solvers.strategies import fixedpoint, smoothers
-from probdiffeq.solvers.strategies.components import priors, corrections
-from probdiffeq.taylor import autodiff
 
 
 def solve(
@@ -39,23 +35,23 @@ def solve(
 
     num_derivatives = int(method[-1])
     if method[:3] == "ts0":
-        correction = corrections.ts0(ode_order=ode_order)
+        correction = ivpsolvers.correction_ts0(ode_order=ode_order)
     else:
         raise ValueError
 
     # Build a solver
-    ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
-    strategy = fixedpoint.fixedpoint_adaptive(ibm, correction)
+    ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivatives)
+    strategy = ivpsolvers.strategy_fixedpoint(ibm, correction)
 
     if calibrate == "dynamic":
-        solver = calibrated.dynamic(strategy)
+        solver = ivpsolvers.solver_dynamic(strategy)
     elif calibrate == "none":
-        solver = uncalibrated.solver(strategy)
+        solver = ivpsolvers.solver(strategy)
     else:
         raise ValueError
 
-    control = controls.proportional_integral()
-    asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
+    control = ivpsolve.control_proportional_integral()
+    asolver = ivpsolve.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
     def solve_(u0: tuple, p, output_scale=1.0):
         if not isinstance(u0, tuple):
@@ -67,13 +63,13 @@ def solve(
         # Initial state
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
-        tcoeffs = autodiff.taylor_mode_scan(
+        tcoeffs = taylor.odejet_padded_scan(
             vf_auto, u0, num=num_derivatives + 1 - ode_order
         )
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
         # Solve
-        sol = ivpsolve.solve_and_save_at(
+        sol = ivpsolve.solve_adaptive_save_at(
             vf_wrapped,
             init,
             save_at=save_at,
@@ -82,8 +78,8 @@ def solve(
         )
 
         # Marginalise
-        markov_seq_posterior = markov.select_terminal(sol.posterior)
-        margs_posterior = markov.marginals(markov_seq_posterior, reverse=True)
+        markov_seq_posterior = stats.markov_select_terminal(sol.posterior)
+        margs_posterior = stats.markov_marginals(markov_seq_posterior, reverse=True)
 
         # Stack the initial state into the solution
         mean = jnp.concatenate(
@@ -108,18 +104,18 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
 
     num_derivatives = int(method[-1])
     if method[:3] == "ts0":
-        correction = corrections.ts0()
+        correction = ivpsolvers.correction_ts0()
     else:
         raise ValueError
 
     # Build a solver
-    ibm = priors.ibm_adaptive(num_derivatives=num_derivatives)
-    strategy = smoothers.smoother_adaptive(ibm, correction)
-    solver = calibrated.dynamic(strategy)
-    control = controls.proportional_integral()
-    asolver = adaptive.adaptive(solver, atol=atol, rtol=rtol, control=control)
+    ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivatives)
+    strategy = ivpsolvers.strategy_smoother(ibm, correction)
+    solver = ivpsolvers.solver_dynamic(strategy)
+    control = ivpsolve.control_proportional_integral()
+    asolver = ivpsolve.adaptive(solver, atol=atol, rtol=rtol, control=control)
 
-    offgrid_marginals = jax.jit(solution.offgrid_marginals_searchsorted)
+    offgrid_marginals = jax.jit(stats.offgrid_marginals_searchsorted)
 
     def solve_(u0: tuple, p, output_scale=1.0):
         if not isinstance(u0, tuple):
@@ -131,11 +127,11 @@ def solve_via_interpolate(method: str, vf, u0_like, /, save_at, *, dt0, atol, rt
         # Initial state
         t0 = save_at[0]
         vf_auto = functools.partial(vf_wrapped, t=t0)
-        tcoeffs = autodiff.taylor_mode_scan(vf_auto, u0, num=num_derivatives)
+        tcoeffs = taylor.odejet_padded_scan(vf_auto, u0, num=num_derivatives)
         init = solver.initial_condition(tcoeffs, output_scale=output_scale)
 
         # Solve
-        sol = ivpsolve.solve_and_save_every_step(
+        sol = ivpsolve.solve_adaptive_save_every_step(
             vf_wrapped,
             init,
             # Small perturbation so that all save_at values

@@ -23,8 +23,6 @@ def main():
     solve = ivpsolvers.asolve_scipy("LSODA", vf, tspan, atol=1e-13, rtol=1e-13)
     ts, ys = solve(u0, params)
 
-    # # If we change the probdiffeq-impl halfway through a script, a warning is raised.
-
     # Read configuration from command line
     args = parse_arguments()
     print("\n", args, "\n")

@@ -1,4 +1,6 @@
+import os
 import jax
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
@@ -71,7 +73,7 @@ def main():
     axin1.set_title("b) VdP sol.", fontsize="x-small", x=0.5, y=0.5)
     axin1.set_ylim((-4, 6))
     axin1.set_yticks((-2, 2))
-    axin1.plot(baseline_grid, baseline_solution, color="black", linewidth=0.75)
+    axin1.plot(baseline_grid, baseline_solution, color="black")
 
     # Make the xticks match between both plots
     for a in [ax, axin1]:
@@ -79,10 +81,7 @@ def main():
         a.set_xticks((0, 2, 4, 6))
 
     # Save the plot to a file
-    filename = str(__file__)
-    filename = filename.replace("experiments/", "figures/")
-    filename = filename.replace(".py", ".pdf")
-    plt.savefig(filename)
+    plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
 
 

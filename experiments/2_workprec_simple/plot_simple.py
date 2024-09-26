@@ -22,17 +22,12 @@ def main():
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
     ]
-    fig, axes = plt.subplot_mosaic(layout, figsize=(8, 4.5), dpi=100)
+    fig, axes = plt.subplot_mosaic(layout, figsize=(6.75, 4.0), dpi=100)
 
     # Plot each set of results
     _ = plot_results(axes["benchmark"], results)
     _ = plot_results_error_vs_length(axes["error_vs_length"], results)
     _ = plot_solution(axes["solution"], ts, ys, checkpoints)
-
-    # Add subplot-labels so the figures can be referenced in the text
-    axes["solution"].set_title(r"\bf a.", loc="left", fontweight="bold")
-    axes["benchmark"].set_title(r"\bf b.", loc="left", fontweight="bold")
-    axes["error_vs_length"].set_title(r"\bf c.", loc="left", fontweight="bold")
 
     plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
@@ -57,7 +52,7 @@ def load_checkpoints():
 
 def plot_results(axis, results):
     """Plot the results."""
-    axis.set_title("Work versus precision")
+    axis.set_title("b) Work versus precision")
     for label, wp in results.items():
         precision = wp["precision"]
         work = wp["work_min"]
@@ -81,11 +76,12 @@ def plot_results(axis, results):
 
 
 def plot_results_error_vs_length(axis, results):
-    axis.set_title("Memory requirements")
+    axis.set_title("c) Memory requirements")
     for label, wp in results.items():
         # Only plot the probabilistic solvers because
         # Runge-Kutta methods' checkpointing is well understood
-        if "TS" in label:
+        # if "TS" in label:
+        if True:
             axis.loglog(
                 wp["precision"],
                 wp["length_of_longest_vector"],
@@ -94,9 +90,10 @@ def plot_results_error_vs_length(axis, results):
                 color=STYLE.color(label),
                 linestyle=STYLE.linestyle(label),
                 alpha=STYLE.alpha_line(label),
+                zorder=STYLE.zorder(label),
             )
 
-    axis.set_ylim((0.9, 1e4))
+    axis.set_ylim((0.5, 1e4))
     axis.legend(ncols=1)
 
     axis.set_xlabel("Time-series error (RMSE)")
@@ -106,7 +103,7 @@ def plot_results_error_vs_length(axis, results):
 
 
 def plot_solution(axis, ts, ys, checkpoints, yscale="linear"):
-    axis.set_title("Rigid body problem")
+    axis.set_title("a) Rigid body problem")
     for linestyle, y in zip(["solid", "dashed", "dotted"], ys.T):
         axis.plot(ts, y, linestyle=linestyle, color="black")
 
