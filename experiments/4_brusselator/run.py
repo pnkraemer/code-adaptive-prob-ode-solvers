@@ -38,7 +38,7 @@ def main():
     }
 
     Nranges = [10, 30, 50, 70]  # with N>=50, the pcolormesh will even look decent.
-    Nranges = [2, 4, 6, 8, 10]
+    # Nranges = [2, 4, 6, 8, 10]
     for N in Nranges:
         # Set up the problem
         vf, u0, (t0, t1), params = ivps.brusselator(N=N)
@@ -74,8 +74,14 @@ def main():
 
         # Use simulate_terminal_values to see how many steps will be taken
         # without crashing the machine.
+        jax.clear_caches()
+        solve = jax.jit(
+            ivpsolve.solve_adaptive_terminal_values,
+            static_argnums=0,
+            static_argnames=["adaptive_solver"],
+        )
         count0 = time.perf_counter()
-        solution = ivpsolve.solve_adaptive_terminal_values(
+        solution = solve(
             vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
         )
         solution.u.block_until_ready()
@@ -84,12 +90,14 @@ def main():
         msg = f"\tBaseline: {int(solution.num_steps):,} steps ({int(total_memory):,} MB) in {count1:.1f}s"
         print(msg)
 
-        if total_memory < 7000:  # not 8, because other processes run as well...
+        # not 8000 because other processes must run as well (but this limit isn't tight)...
+        if total_memory < 7000:
             strategy_ = ivpsolvers.strategy_smoother(ibm, ts0)
             solver_ = ivpsolvers.solver_dynamic(strategy_)
             adaptive_solver_ = ivpsolve.adaptive(
                 solver_, atol=tol, rtol=tol, control=ctrl
             )
+            jax.clear_caches()
             count0 = time.perf_counter()
             solution = ivpsolve.solve_adaptive_save_every_step(
                 vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver_
@@ -104,9 +112,15 @@ def main():
             results_textbook["ys"].append(solution.u)
             results_textbook["num_steps"].append(jnp.amax(solution.num_steps))
 
-        save_at = jnp.linspace(t0, t1, num=200)
+        save_at = jnp.linspace(t0, t1, num=100)
         count0 = time.perf_counter()
-        solution = ivpsolve.solve_adaptive_save_at(
+        jax.clear_caches()
+        solve = jax.jit(
+            ivpsolve.solve_adaptive_save_at,
+            static_argnums=0,
+            static_argnames=["adaptive_solver"],
+        )
+        solution = solve(
             vf, init, save_at=save_at, dt0=0.01, adaptive_solver=adaptive_solver
         )
         solution.u.block_until_ready()
