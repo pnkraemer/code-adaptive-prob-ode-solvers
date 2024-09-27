@@ -17,7 +17,7 @@ if __name__ == "__main__":
     checkpoint = load("data_checkpoint")
     textbook = load("data_textbook")
 
-    num_steps = checkpoint["num_steps"][-1]
+    num_steps = checkpoint["num_steps"][-2]
     ts = checkpoint["ts"][-2]
     ys = checkpoint["ys"][-2]
     # ts, ys = solution.t, solution.u
@@ -29,9 +29,6 @@ if __name__ == "__main__":
     layout = [["brusselator", "complexity"]]
     fig, ax = plt.subplot_mosaic(layout, figsize=(6.75, 2.5), dpi=150)
 
-    # todo: rerun until N=64, and then mark 4 GB as an upper limit
-    #  then, critically analyse the plot, put it into the paper, discuss it completely
-    #  and reevaluate whether it creates more questions or not
     print(textbook["N"])
     msg = f"a) Brusselator: ${len(ts):,}$ target pts., ${int(jnp.amax(num_steps)):,}$ compute pts."
     ax["brusselator"].set_title(msg)
@@ -48,7 +45,11 @@ if __name__ == "__main__":
         # if n % 3 == 0:
         ax["complexity"].plot(n, m, "s", markersize=10, color="C0")
         ax["complexity"].annotate(
-            f"{t:.1f}s", xy=(n, m), xytext=(n, 0.35 * m), color="C0", fontsize="x-small"
+            f"{t:.1f}s",
+            xy=(n, m),
+            xytext=(n * 1.1, 0.35 * m),
+            color="C0",
+            fontsize="x-small",
         )
 
     for n, t, m in zip(
@@ -59,10 +60,15 @@ if __name__ == "__main__":
         ax["complexity"].annotate(
             f"{t:.1f}s", xy=(n, m), xytext=(n, 0.35 * m), color="C1", fontsize="x-small"
         )
+    for n in checkpoint["N"][-3:]:
+        ax["complexity"].plot(n, 8_000, "x", color="C1")
+        ax["complexity"].annotate(
+            "fail", xy=(n * 1.1, 12_000), fontsize="x-small", color="C1"
+        )
 
     ax["complexity"].set_xlabel("Problem size $d$")
     ax["complexity"].set_ylabel("Memory consumption (MB)")
-    ax["complexity"].set_ylim((2e-1, 40_000))
+    ax["complexity"].set_ylim((1.5e-1, 40_000))
 
     ax["complexity"].axhline(8_000, color="black", linestyle="dotted")
     ax["complexity"].annotate(
@@ -86,20 +92,20 @@ if __name__ == "__main__":
     ax["complexity"].axvline(checkpoint["N"][-2], color="black", linestyle="dotted")
     ax["complexity"].annotate(
         "Used for Figure a)",
-        xy=(checkpoint["N"][-2], 2 * checkpoint["memory"][-2]),
+        xy=(checkpoint["N"][-2], 3 * checkpoint["memory"][-2]),
         rotation=90 * 3,
         color="black",
-        fontsize="small",
+        fontsize="x-small",
     )
 
     ax["complexity"].plot(
-        checkpoint["N"], checkpoint["memory"], marker=".", label="Our code"
+        textbook["N"], textbook["memory"], marker=".", label="Previous SoTA", color="C1"
     )
     ax["complexity"].plot(
-        textbook["N"], textbook["memory"], marker=".", label="Previous SoTA"
+        checkpoint["N"], checkpoint["memory"], marker=".", label="Our code", color="C0"
     )
     ax["complexity"].set_xscale("log", base=2)
     ax["complexity"].set_yscale("log", base=2)
-    ax["complexity"].legend()
+    ax["complexity"].legend(fontsize="small", loc="lower right")
     plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
