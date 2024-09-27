@@ -94,7 +94,7 @@ def main():
         print(msg)
 
         # not 8000 because other processes must run as well (but this limit isn't tight)...
-        if total_memory < 5000:
+        if total_memory < 4000:
             strategy_ = ivpsolvers.strategy_smoother(ibm, ts0)
             solver_ = ivpsolvers.solver_dynamic(strategy_)
             adaptive_solver_ = ivpsolve.adaptive(

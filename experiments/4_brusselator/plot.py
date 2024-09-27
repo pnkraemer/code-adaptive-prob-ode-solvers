@@ -18,8 +18,8 @@ if __name__ == "__main__":
     textbook = load("data_textbook")
 
     num_steps = checkpoint["num_steps"][-1]
-    ts = checkpoint["ts"][-1]
-    ys = checkpoint["ys"][-1]
+    ts = checkpoint["ts"][-2]
+    ys = checkpoint["ys"][-2]
     # ts, ys = solution.t, solution.u
 
     Us, Vs = jnp.split(ys, axis=1, indices_or_sections=2)
@@ -83,10 +83,10 @@ if __name__ == "__main__":
 
     ax["complexity"].set_xlim((0.6 * checkpoint["N"][0], checkpoint["N"][-1] * 3))
 
-    ax["complexity"].axvline(checkpoint["N"][-3], color="black", linestyle="dotted")
+    ax["complexity"].axvline(checkpoint["N"][-2], color="black", linestyle="dotted")
     ax["complexity"].annotate(
         "Used for Figure a)",
-        xy=(checkpoint["N"][-3], 2 * checkpoint["memory"][-3]),
+        xy=(checkpoint["N"][-2], 2 * checkpoint["memory"][-2]),
         rotation=90 * 3,
         color="black",
         fontsize="small",
