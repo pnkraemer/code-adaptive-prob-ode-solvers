@@ -37,21 +37,24 @@ def main():
         "num_steps": [],
     }
 
-    Nranges = [10, 30, 50, 70]  # with N>=50, the pcolormesh will even look decent.
-    # Nranges = [2, 4, 6, 8, 10]
+    # Nranges = [10, 20, 30, 40, 50, 60, 70, 80, 90]  # with N>=50, the pcolormesh will even look decent.
+    Nranges = [2, 4, 8, 16, 32, 64, 128]
+    powers = jnp.arange(3, 8, step=0.5)
+    Nranges = 2**powers
     for N in Nranges:
+        N = int(N)
         # Set up the problem
         vf, u0, (t0, t1), params = ivps.brusselator(N=N)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            impl.select("dense", ode_shape=(2 * N,))
+            impl.select("isotropic", ode_shape=(2 * N,))
 
         # Set up the solver
         num = 4
         tol = 1e-8
         ctrl = ivpsolve.control_proportional_integral()
         ibm = ivpsolvers.prior_ibm(num_derivatives=num)
-        ts0 = ivpsolvers.correction_ts1(ode_order=1)
+        ts0 = ivpsolvers.correction_ts0(ode_order=1)
         strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
         solver = ivpsolvers.solver_dynamic(strategy)
         adaptive_solver = ivpsolve.adaptive(solver, atol=tol, rtol=tol, control=ctrl)
@@ -91,7 +94,7 @@ def main():
         print(msg)
 
         # not 8000 because other processes must run as well (but this limit isn't tight)...
-        if total_memory < 7000:
+        if total_memory < 5000:
             strategy_ = ivpsolvers.strategy_smoother(ibm, ts0)
             solver_ = ivpsolvers.solver_dynamic(strategy_)
             adaptive_solver_ = ivpsolve.adaptive(
@@ -104,15 +107,15 @@ def main():
             )
             solution.u.block_until_ready()
             count1 = time.perf_counter() - count0
-            print(f"\tTextbook solver: {count1:.1f}s")
+            size_sol = jax.flatten_util.ravel_pytree(solution)[0].nbytes / 1024**2
+            print(f"\tTextbook solver: {count1:.1f}s using {int(size_sol):,} MB")
             results_textbook["N"].append(N)
             results_textbook["runtime"].append(count1)
             results_textbook["memory"].append(total_memory)
-            results_textbook["ts"].append(solution.t)
-            results_textbook["ys"].append(solution.u)
+
             results_textbook["num_steps"].append(jnp.amax(solution.num_steps))
 
-        save_at = jnp.linspace(t0, t1, num=100)
+        save_at = jnp.linspace(t0, t1, num=200)
         count0 = time.perf_counter()
         jax.clear_caches()
         solve = jax.jit(

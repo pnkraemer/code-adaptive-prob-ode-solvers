@@ -29,6 +29,10 @@ if __name__ == "__main__":
     layout = [["brusselator", "complexity"]]
     fig, ax = plt.subplot_mosaic(layout, figsize=(6.75, 2.5), dpi=150)
 
+    # todo: rerun until N=64, and then mark 4 GB as an upper limit
+    #  then, critically analyse the plot, put it into the paper, discuss it completely
+    #  and reevaluate whether it creates more questions or not
+    print(textbook["N"])
     msg = f"a) Brusselator: ${len(ts):,}$ target pts., ${int(jnp.amax(num_steps)):,}$ compute pts."
     ax["brusselator"].set_title(msg)
     ax["brusselator"].pcolormesh(Xs, Ts, Us)
@@ -38,43 +42,64 @@ if __name__ == "__main__":
 
     ax["complexity"].set_title("b) Memory consumption vs. problem size")
 
-    for n, t, m in zip(checkpoint["N"], checkpoint["runtime"], checkpoint["memory"]):
-        ax["complexity"].semilogy(n, m, "^", color="C0")
+    for n, t, m in zip(
+        checkpoint["N"][::2], checkpoint["runtime"][::2], checkpoint["memory"][::2]
+    ):
+        # if n % 3 == 0:
+        ax["complexity"].plot(n, m, "s", markersize=10, color="C0")
         ax["complexity"].annotate(
-            f"{t:.1f}s", xy=(n, m), xytext=(n, 0.35 * m), color="C0", fontsize="small"
+            f"{t:.1f}s", xy=(n, m), xytext=(n, 0.35 * m), color="C0", fontsize="x-small"
         )
 
-    for n, t, m in zip(textbook["N"], textbook["runtime"], textbook["memory"]):
-        ax["complexity"].semilogy(n, m, "o", color="C1")
+    for n, t, m in zip(
+        textbook["N"][::2], textbook["runtime"][::2], textbook["memory"][::2]
+    ):
+        ax["complexity"].plot(n, m, "s", markersize=10, color="C1")
+        # if n % 3 == 0:
         ax["complexity"].annotate(
-            f"{t:.1f}s", xy=(n, m), xytext=(n, 1.5 * m), color="C1", fontsize="small"
+            f"{t:.1f}s", xy=(n, m), xytext=(n, 0.35 * m), color="C1", fontsize="x-small"
         )
 
     ax["complexity"].set_xlabel("Problem size $d$")
     ax["complexity"].set_ylabel("Memory consumption (MB)")
     ax["complexity"].set_ylim((2e-1, 40_000))
 
-    ax["complexity"].axvline(checkpoint["N"][-1], color="black", linestyle="dotted")
     ax["complexity"].axhline(8_000, color="black", linestyle="dotted")
     ax["complexity"].annotate(
-        r"Machine limit ($\approx$ 8 GB)",
+        r"$\approx$ 8 GB (Machine limit)",
         xy=(10, 9_000),
         color="black",
         fontsize="small",
         zorder=0,
     )
+    # ax["complexity"].axhline(2_000, color="black", linestyle="dotted")
+    # ax["complexity"].annotate(
+    #     r"$\approx$ GB",
+    #     xy=(10, 4_400),
+    #     color="black",
+    #     fontsize="small",
+    #     zorder=0,
+    # )
+
+    ax["complexity"].set_xlim((0.6 * checkpoint["N"][0], checkpoint["N"][-1] * 3))
+
+    ax["complexity"].axvline(checkpoint["N"][-3], color="black", linestyle="dotted")
     ax["complexity"].annotate(
         "Used for Figure a)",
-        xy=(checkpoint["N"][-1], 3e-1),
+        xy=(checkpoint["N"][-3], 2 * checkpoint["memory"][-3]),
         rotation=90 * 3,
         color="black",
         fontsize="small",
     )
-    ax["complexity"].semilogy(
-        checkpoint["N"], checkpoint["memory"], marker="None", label="Our code"
+
+    ax["complexity"].plot(
+        checkpoint["N"], checkpoint["memory"], marker=".", label="Our code"
     )
-    ax["complexity"].semilogy(
-        textbook["N"], textbook["memory"], marker="None", label="Fully adaptive"
+    ax["complexity"].plot(
+        textbook["N"], textbook["memory"], marker=".", label="Previous SoTA"
     )
+    ax["complexity"].set_xscale("log", base=2)
+    ax["complexity"].set_yscale("log", base=2)
     ax["complexity"].legend()
+    plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
