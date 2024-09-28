@@ -13,8 +13,9 @@ class Data:
     memory: list
     runtime: list
     num_steps: list
-    ts: list
-    ys: list
+
+    def __len__(self):
+        return len(self.Ns)
 
     def __getitem__(self, item):
         return Data(
@@ -22,135 +23,134 @@ class Data:
             memory=self.memory[item],
             runtime=self.runtime[item],
             num_steps=self.num_steps[item],
-            ts=self.ts[item],
-            ys=self.ys[item],
         )
 
     @classmethod
-    def load(cls, string, /) -> dict:
+    def load(cls, string, /, skip: int):
         filename = os.path.dirname(__file__) + f"/{string}.npy"
         data = jnp.load(filename, allow_pickle=True).item()
 
         Ns, mem, tm, n = data["N"], data["memory"], data["runtime"], data["num_steps"]
-        ts, ys = data["ts"], data["ys"]
         return cls(
-            Ns=Ns[2:],
-            memory=mem[2:],
-            runtime=tm[2:],
-            num_steps=n[2:],
-            ts=ts[2:],
-            ys=ys[2:],
+            Ns=Ns[skip:], memory=mem[skip:], runtime=tm[skip:], num_steps=n[skip:]
         )
-
-    def plot_pcolormesh(self, axis, /, *, resolution: int):
-        idx = self.Ns.index(resolution)
-        num_steps = self.num_steps[idx]
-        ts = self.ts[idx]
-        ys = self.ys[idx]
-
-        title = "a) Brusselator:"
-        title += f" ${len(ts):,}$ target pts."
-        title += f", ${int(num_steps):,}$ compute pts."
-        axis.set_title(title)
-
-        axis.set_xlabel("Space dimension")
-        axis.set_ylabel("Time dimension $t$")
-        axis.tick_params(which="both", direction="out")
-
-        Us, Vs = jnp.split(ys, axis=1, indices_or_sections=2)
-        xs = jnp.linspace(0, 1, endpoint=True, num=len(ys[0]) // 2)
-        Xs, Ts = jnp.meshgrid(xs, ts)
-        axis.pcolormesh(Xs, Ts, Us)
 
     def plot_mark_vline_resolution(self, axis, /, *, resolution: int):
         idx = self.Ns.index(resolution)
-        N, mem = self.Ns[idx], self.memory[idx]
+        N = self.Ns[idx]
         axis.axvline(N, color="black", linestyle="dotted")
 
         text = "Figure a)"
-        xy = (N, max(self.memory))
+        xy = (N, 20_000)
         kwargs = {"rotation": 90 * 3, "color": "black", "fontsize": "x-small"}
         axis.annotate(text, xy=xy, **kwargs)
 
-    def plot_mark_hline_machine_limit(self, axis, /, *, where: int, text: str):
-        axis.axhline(where, color="black", linestyle="dotted")
-        xy = (min(self.Ns), where * 1.2)
+    def plot_mark_hline_capacity(self, axis, /, *, text: str):
+        axis.axhline(max(self.memory), color="black", linestyle="dotted")
+
+        xy = (3, max(self.memory) * 1.2)
         axis.annotate(text, xy=xy, color="black", fontsize="small")
 
-    def plot_curve_memory(
-        self, axis, /, *, color: str, label: str, linestyle="solid", marker="."
-    ):
-        axis.plot(
-            self.Ns,
-            self.memory,
-            marker=marker,
-            label=label,
-            color=color,
-            linestyle=linestyle,
-        )
+    def plot_curve_memory(self, axis, /, **mpl_kwargs):
+        axis.plot(self.Ns, self.memory, **mpl_kwargs)
 
-    def plot_annotate_runtime(self, axis, /, *, color: str, stride: int):
+    def plot_annotate_runtime(
+        self, axis, /, *, annotate: str, stride: int, **mpl_kwargs
+    ):
         Ns = self.Ns[::stride]
         runs = self.runtime[::stride]
         mems = self.memory[::stride]
         for n, t, m in zip(Ns, runs, mems):
-            axis.plot(n, m, "s", markersize=10, color=color)
+            if annotate == "upper":
+                xytext = (n / 1.8, m * 1.5)
+            else:
+                xytext = (n * 1.2, m / 3)
             axis.annotate(
-                f"{t:.1f}s",
-                xy=(n, m),
-                xytext=(n * 1.1, 0.35 * m),
-                color=color,
-                fontsize="x-small",
+                f"{t:.1f}s", xy=(n, m), xytext=xytext, fontsize="x-small", **mpl_kwargs
             )
+            axis.plot(n, m, "s", markersize=10, **mpl_kwargs)
 
     def plot_annotate_failures(self, axis, /, *, color: str):
         for n, m in zip(self.Ns[len(self.runtime) :], self.memory[len(self.runtime) :]):
-            xy = (1.1 * n, 1.1 * m)
-            text = f"{(m/1024):.1f} GB"
+            xy = (1.2 * n, 1.1 * m)
+            text = f"{(m/1024):.1f} GB (est.)"
             axis.annotate(text, xy=xy, fontsize="x-small", color=color)
+
+
+def load_meshgrid(string, resolution):
+    filename = os.path.dirname(__file__) + f"/{string}.npy"
+    data = jnp.load(filename, allow_pickle=True).item()
+
+    idx = data["N"].index(resolution)
+    num_steps = data["num_steps"][idx]
+    ts = data["ts"][idx]
+    ys = data["ys"][idx]
+
+    Us, Vs = jnp.split(ys, axis=1, indices_or_sections=2)
+    xs = jnp.linspace(0, 1, endpoint=True, num=len(ys[0]) // 2)
+    Xs, Ts = jnp.meshgrid(xs, ts)
+    return Xs, Ts, Us, num_steps
+
+
+def plot_pcolormesh(axis, /, Xs, Ts, Us, *, num_steps):
+    title = "a) Brusselator:"
+    title += f" ${len(Ts):,}$ target pts."
+    title += f", ${int(num_steps):,}$ compute pts."
+    axis.set_title(title)
+
+    axis.set_xlabel("Space dimension")
+    axis.set_ylabel("Time dimension $t$")
+    axis.tick_params(which="both", direction="out")
+    axis.pcolormesh(Xs, Ts, Us)
 
 
 def main():
     plt.rcParams.update(exp_util.plot_params())
-    checkpoint = Data.load("data_checkpoint")
-    textbook = Data.load("data_textbook")
+    checkpoint = Data.load("data_checkpoint", skip=2)
+    textbook = Data.load("data_textbook", skip=2)
 
     # Prepare the Figure
     layout = [["brusselator", "complexity"]]
     fig, ax = plt.subplot_mosaic(layout, figsize=(6.75, 2.5), dpi=150)
 
-    # Plot a bunch of stuff
-    checkpoint.plot_pcolormesh(ax["brusselator"], resolution=90)
+    Xs, Ts, Us, num_steps = load_meshgrid("data_checkpoint", resolution=90)
+    plot_pcolormesh(ax["brusselator"], Xs, Ts, Us, num_steps=num_steps)
+
+    # Plot the checkpointing info
     checkpoint.plot_mark_vline_resolution(ax["complexity"], resolution=90)
-
-    checkpoint.plot_curve_memory(ax["complexity"], color="C0", label="Ours")
-    checkpoint.plot_annotate_runtime(ax["complexity"], color="C0", stride=2)
-
-    # todo: plot the predicted runtime for the failures
-    nsuccess = len(textbook.runtime)
-    textbook[:nsuccess].plot_curve_memory(
-        ax["complexity"], color="C1", label="Prev. SotA"
+    checkpoint.plot_curve_memory(ax["complexity"], marker=".", color="C0", label="Ours")
+    checkpoint.plot_annotate_runtime(
+        ax["complexity"], annotate="lower", color="C0", stride=2
     )
-    textbook[nsuccess:].plot_curve_memory(
+
+    # Split the current SotA into "good" and "bad"
+    nsuccess = len(textbook.runtime)
+    textbook_good, textbook_bad = textbook[:nsuccess], textbook[nsuccess:]
+
+    # Plot the "good" results
+    textbook_good.plot_curve_memory(
+        ax["complexity"], marker=".", color="C1", label="Prev. SotA"
+    )
+    textbook_good.plot_annotate_runtime(
+        ax["complexity"], annotate="upper", color="C1", stride=2
+    )
+
+    textbook_good.plot_mark_hline_capacity(ax["complexity"], text="SotA max. capacity")
+    textbook_bad.plot_curve_memory(
         ax["complexity"],
         color="gray",
         label="Prev. SotA (estimated)",
         linestyle="None",
         marker="x",
     )
-    text = "SotA exceeds capacity"
-    textbook.plot_mark_hline_machine_limit(
-        ax["complexity"], where=textbook.memory[nsuccess - 1], text=text
-    )
-    textbook.plot_annotate_runtime(ax["complexity"], color="C1", stride=2)
-    textbook.plot_annotate_failures(ax["complexity"], color="gray")
+    textbook_bad.plot_annotate_failures(ax["complexity"], color="gray")
 
     # Adjust the x- and y-limits and some other formats
     ax["complexity"].set_title("b) Memory consumption vs. problem size")
     ax["complexity"].set_xlabel("Problem size $d$")
     ax["complexity"].set_ylabel("Memory consumption (MB)")
-    # ax["complexity"].set_ylim((1.5e-1, 40_000))
-    # ax["complexity"].set_xlim((2, 2**10))
+    ax["complexity"].set_ylim((1.5e-1, 1_000_000))
+    ax["complexity"].set_xlim((2, 2**11))
     ax["complexity"].set_xscale("log", base=2)
     ax["complexity"].set_yscale("log", base=2)
     ax["complexity"].legend(fontsize="x-small")
