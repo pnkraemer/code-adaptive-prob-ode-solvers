@@ -57,8 +57,8 @@ class Data:
     def plot_annotate_max_memory(self, axis, /, **mpl_kwargs):
         n, m = self.Ns[-1], self.memory[-1]
         xy = (n, m)
-        xytext = (n * 1.4, m * 1.1)
-        text = f"{(m/1024):.2f} GB"
+        xytext = (n * 1.1, m * 1.8)
+        text = f"{(m):.2f} MB"
         axis.annotate(text, xy=xy, xytext=xytext, fontsize="x-small", **mpl_kwargs)
         axis.plot(n, m, "s", markersize=10, **mpl_kwargs)
 
@@ -72,9 +72,13 @@ class Data:
             if annotate == "upper":
                 xytext = (n / 1.8, m * 2)
             else:
-                xytext = (n * 1.2, m / 4)
+                xytext = (n * 1.1, m / 4)
             axis.annotate(
-                f"{t:.1f}s", xy=(n, m), xytext=xytext, fontsize="x-small", **mpl_kwargs
+                f"{t:.1f} sec",
+                xy=(n, m),
+                xytext=xytext,
+                fontsize="x-small",
+                **mpl_kwargs,
             )
             axis.plot(n, m, "s", markersize=10, **mpl_kwargs)
 
@@ -144,25 +148,34 @@ def main():
         ax["complexity"], annotate="upper", color="C1", stride=2
     )
 
-    textbook_good.plot_mark_hline_capacity(ax["complexity"], text="SotA max. capacity")
+    ax["complexity"].axhline(8 * 1024, color="black", linestyle="dotted")
+    xy = (3, 10_000)
+    ax["complexity"].annotate(
+        "8 GB (machine capacity)", xy=xy, color="black", fontsize="x-small"
+    )
+
+    # textbook_good.plot_mark_hline_capacity(ax["complexity"], text="SotA max. capacity")
     textbook_bad.plot_curve_memory(
         ax["complexity"],
-        color="gray",
+        color="C1",
         label="Prev. SotA (failed)",
         linestyle="None",
         marker="x",
     )
-    textbook_bad.plot_annotate_failures(ax["complexity"], color="gray")
+    textbook_bad.plot_annotate_failures(ax["complexity"], color="C1")
 
     # Adjust the x- and y-limits and some other formats
     ax["complexity"].set_title("b) Memory consumption vs. problem size")
     ax["complexity"].set_xlabel("Problem size $d$")
-    ax["complexity"].set_ylabel("Memory consumption (MB)")
-    ax["complexity"].set_ylim((1.5e-1, 2_000_000))
+    ax["complexity"].set_ylabel("Memory consumption")
+    ax["complexity"].set_ylim((1.2e-1, 2_000_000))
     ax["complexity"].set_xlim((2, 1.25 * 2**11))
     ax["complexity"].set_xscale("log", base=2)
     ax["complexity"].set_yscale("log", base=2)
     ax["complexity"].legend(fontsize="x-small")
+
+    ax["complexity"].set_yticks([1024**i for i in range(3)])
+    ax["complexity"].set_yticklabels([f"1 {m}" for m in ["MB", "GB", "TB"]])
 
     # Save the figure
     plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
