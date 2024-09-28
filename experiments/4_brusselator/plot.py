@@ -106,8 +106,8 @@ def load_meshgrid(string, resolution):
 
 def plot_pcolormesh(axis, /, Xs, Ts, Us, *, num_steps):
     title = "a) Brusselator:"
-    title += f" ${len(Ts):,}$ target pts."
-    title += f", ${int(num_steps):,}$ compute pts."
+    title += f" ${len(Ts):,}$ target points"
+    # title += f", ${int(num_steps):,}$ compute pts."
     axis.set_title(title)
 
     axis.set_xlabel("Space dimension")
