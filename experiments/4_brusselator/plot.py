@@ -41,7 +41,7 @@ class Data:
         axis.axvline(N, color="black", linestyle="dotted")
 
         text = "Figure a)"
-        xy = (N, 20_000)
+        xy = (N, 40_000)
         kwargs = {"rotation": 90 * 3, "color": "black", "fontsize": "x-small"}
         axis.annotate(text, xy=xy, **kwargs)
 
@@ -54,6 +54,14 @@ class Data:
     def plot_curve_memory(self, axis, /, **mpl_kwargs):
         axis.plot(self.Ns, self.memory, **mpl_kwargs)
 
+    def plot_annotate_max_memory(self, axis, /, **mpl_kwargs):
+        n, m = self.Ns[-1], self.memory[-1]
+        xy = (n, m)
+        xytext = (n * 1.4, m * 1.1)
+        text = f"{(m/1024):.2f} GB"
+        axis.annotate(text, xy=xy, xytext=xytext, fontsize="x-small", **mpl_kwargs)
+        axis.plot(n, m, "s", markersize=10, **mpl_kwargs)
+
     def plot_annotate_runtime(
         self, axis, /, *, annotate: str, stride: int, **mpl_kwargs
     ):
@@ -62,9 +70,9 @@ class Data:
         mems = self.memory[::stride]
         for n, t, m in zip(Ns, runs, mems):
             if annotate == "upper":
-                xytext = (n / 1.8, m * 1.5)
+                xytext = (n / 1.8, m * 2)
             else:
-                xytext = (n * 1.2, m / 3)
+                xytext = (n * 1.2, m / 4)
             axis.annotate(
                 f"{t:.1f}s", xy=(n, m), xytext=xytext, fontsize="x-small", **mpl_kwargs
             )
@@ -73,7 +81,7 @@ class Data:
     def plot_annotate_failures(self, axis, /, *, color: str):
         for n, m in zip(self.Ns[len(self.runtime) :], self.memory[len(self.runtime) :]):
             xy = (1.2 * n, 1.1 * m)
-            text = f"{(m/1024):.1f} GB (est.)"
+            text = f"{(m/1024):.0f} GB (est.)"
             axis.annotate(text, xy=xy, fontsize="x-small", color=color)
 
 
@@ -106,22 +114,23 @@ def plot_pcolormesh(axis, /, Xs, Ts, Us, *, num_steps):
 
 def main():
     plt.rcParams.update(exp_util.plot_params())
-    checkpoint = Data.load("data_checkpoint", skip=2)
-    textbook = Data.load("data_textbook", skip=2)
+    checkpoint = Data.load("data_checkpoint", skip=1)
+    textbook = Data.load("data_textbook", skip=1)
 
     # Prepare the Figure
     layout = [["brusselator", "complexity"]]
     fig, ax = plt.subplot_mosaic(layout, figsize=(6.75, 2.5), dpi=150)
 
-    Xs, Ts, Us, num_steps = load_meshgrid("data_checkpoint", resolution=90)
+    Xs, Ts, Us, num_steps = load_meshgrid("data_checkpoint", resolution=128)
     plot_pcolormesh(ax["brusselator"], Xs, Ts, Us, num_steps=num_steps)
 
     # Plot the checkpointing info
-    checkpoint.plot_mark_vline_resolution(ax["complexity"], resolution=90)
+    checkpoint.plot_mark_vline_resolution(ax["complexity"], resolution=128)
     checkpoint.plot_curve_memory(ax["complexity"], marker=".", color="C0", label="Ours")
     checkpoint.plot_annotate_runtime(
         ax["complexity"], annotate="lower", color="C0", stride=2
     )
+    checkpoint.plot_annotate_max_memory(ax["complexity"], color="C0")
 
     # Split the current SotA into "good" and "bad"
     nsuccess = len(textbook.runtime)
@@ -139,7 +148,7 @@ def main():
     textbook_bad.plot_curve_memory(
         ax["complexity"],
         color="gray",
-        label="Prev. SotA (estimated)",
+        label="Prev. SotA (failed)",
         linestyle="None",
         marker="x",
     )
@@ -149,8 +158,8 @@ def main():
     ax["complexity"].set_title("b) Memory consumption vs. problem size")
     ax["complexity"].set_xlabel("Problem size $d$")
     ax["complexity"].set_ylabel("Memory consumption (MB)")
-    ax["complexity"].set_ylim((1.5e-1, 1_000_000))
-    ax["complexity"].set_xlim((2, 2**11))
+    ax["complexity"].set_ylim((1.5e-1, 2_000_000))
+    ax["complexity"].set_xlim((2, 1.25 * 2**11))
     ax["complexity"].set_xscale("log", base=2)
     ax["complexity"].set_yscale("log", base=2)
     ax["complexity"].legend(fontsize="x-small")

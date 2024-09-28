@@ -39,7 +39,7 @@ def main():
 
     # Nranges = [10, 20, 30, 40, 50, 60, 70, 80, 90]  # with N>=50, the pcolormesh will even look decent.
     # Nranges = [2, 4, 8, 16, 32, 64, 128]
-    powers = jnp.arange(0.5, 9.5, step=1)  # go up to 9.5
+    powers = jnp.arange(1, 9.5, step=1)  # go up to 9.5
     Nranges = 2**powers
 
     for N in Nranges:
