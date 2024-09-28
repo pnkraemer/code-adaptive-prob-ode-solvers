@@ -1,11 +1,10 @@
+import time
+from typing import Callable, NamedTuple
+
 import jax
 import jax.numpy as jnp
-import time
-
 from probdiffeq import ivpsolve, ivpsolvers, taylor
 from probdiffeq.impl import impl
-
-from typing import NamedTuple, Callable
 
 
 class IVPSolution(NamedTuple):

@@ -1,16 +1,17 @@
 """Train a neural ODE with ProbDiffEq and Optax."""
 
+import os
+
+import equinox
+import jax
 import jax.flatten_util
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import optax
 import tqdm
-import os
-import equinox
-
-from odecheckpts import train_util, exp_util, ivps, ivpsolvers
 from probdiffeq.backend import control_flow
-import jax
+
+from odecheckpts import exp_util, ivps, ivpsolvers, train_util
 
 PLOT_PARAMS = exp_util.plot_params()
 

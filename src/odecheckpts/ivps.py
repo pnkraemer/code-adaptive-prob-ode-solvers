@@ -1,8 +1,8 @@
 """Initial value problems."""
 
-import jax.numpy as jnp
-from diffeqzoo import ivps, backend
 import jax
+import jax.numpy as jnp
+from diffeqzoo import backend, ivps
 
 
 def logistic():

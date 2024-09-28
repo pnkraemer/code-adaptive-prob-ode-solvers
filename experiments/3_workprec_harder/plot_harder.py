@@ -1,6 +1,8 @@
 import os
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+
 from odecheckpts import exp_util
 
 TODO = "\nTODO: Rename all saved data into data_* so the directory is clean.\n"

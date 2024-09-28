@@ -3,8 +3,8 @@
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from odecheckpts import ivpsolvers, ivps
 
+from odecheckpts import ivps, ivpsolvers
 
 vf, u0, time_span, args = ivps.rigid_body()
 

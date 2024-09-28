@@ -1,7 +1,7 @@
-from tueplots import axes
 import dataclasses
-
 from typing import Callable
+
+from tueplots import axes
 
 
 def plot_params():

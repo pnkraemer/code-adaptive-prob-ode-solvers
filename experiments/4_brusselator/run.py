@@ -1,25 +1,22 @@
-import matplotlib.pyplot as plt
+import os
+import time
 import warnings
+
 import jax
 import jax.flatten_util
-
-from odecheckpts import ivps
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
 from probdiffeq import ivpsolve, ivpsolvers, taylor
 from probdiffeq.impl import impl
 
-import jax.numpy as jnp
-from odecheckpts import exp_util
-
-import time
-
-import os
-
+from odecheckpts import exp_util, ivps
 
 # Run: free -h --si to check how much memory is actually free
 
 
 def main():
     # Set up all the configs
+    jax.config.update("jax_enable_compilation_cache", False)
     jax.config.update("jax_enable_x64", True)
     plt.rcParams.update(exp_util.plot_params())
 
@@ -42,12 +39,9 @@ def main():
 
     # Nranges = [10, 20, 30, 40, 50, 60, 70, 80, 90]  # with N>=50, the pcolormesh will even look decent.
     # Nranges = [2, 4, 8, 16, 32, 64, 128]
-    print(
-        "Go up to 9.5, then plot the projected memory demands, "
-        "too, and make it all look pretty and move on"
-    )
-    powers = jnp.arange(1, 7, step=1)  # go up to 9.5
+    powers = jnp.arange(0.5, 9.5, step=1)  # go up to 9.5
     Nranges = 2**powers
+
     for N in Nranges:
         N = int(N)
         # Set up the problem
@@ -142,6 +136,7 @@ def main():
         results_checkpoint["ts"].append(solution.t)
         results_checkpoint["ys"].append(solution.u)
         results_checkpoint["num_steps"].append(jnp.amax(solution.num_steps))
+
     print()
 
     jnp.save(

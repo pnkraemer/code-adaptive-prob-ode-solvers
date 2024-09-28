@@ -1,6 +1,8 @@
 import os
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+
 from odecheckpts import exp_util
 
 PLOT_PARAMS = exp_util.plot_params()

@@ -25,7 +25,6 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from diffeqzoo import backend, ivps
-
 from probdiffeq import adaptive, ivpsolve
 from probdiffeq.impl import impl
 from probdiffeq.solvers import calibrated, solution

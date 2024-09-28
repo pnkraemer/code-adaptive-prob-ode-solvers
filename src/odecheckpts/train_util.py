@@ -1,9 +1,9 @@
+from typing import Callable
+
 import jax
 import jax.numpy as jnp
 import optax
-
 from probdiffeq.solvers import solution
-from typing import Callable
 
 
 def loss(solver: Callable, unflatten: Callable):

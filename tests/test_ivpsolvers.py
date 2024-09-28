@@ -4,7 +4,8 @@ import functools
 
 import jax.numpy as jnp
 import pytest_cases
-from odecheckpts import ivpsolvers, ivps
+
+from odecheckpts import ivps, ivpsolvers
 
 
 @pytest_cases.parametrize("m0", ["ts0-2", "ts0-4"])

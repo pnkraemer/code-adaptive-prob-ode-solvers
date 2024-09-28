@@ -7,7 +7,6 @@ import diffrax
 import jax
 import jax.numpy as jnp
 import scipy.integrate
-
 from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.impl import impl
 
