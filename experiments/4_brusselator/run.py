@@ -15,6 +15,9 @@ import time
 import os
 
 
+# Run: free -h --si to check how much memory is actually free
+
+
 def main():
     # Set up all the configs
     jax.config.update("jax_enable_x64", True)
@@ -38,8 +41,12 @@ def main():
     }
 
     # Nranges = [10, 20, 30, 40, 50, 60, 70, 80, 90]  # with N>=50, the pcolormesh will even look decent.
-    Nranges = [2, 4, 8, 16, 32, 64, 128]
-    powers = jnp.arange(3, 8, step=0.5)
+    # Nranges = [2, 4, 8, 16, 32, 64, 128]
+    print(
+        "Go up to 9.5, then plot the projected memory demands, "
+        "too, and make it all look pretty and move on"
+    )
+    powers = jnp.arange(1, 7, step=1)  # go up to 9.5
     Nranges = 2**powers
     for N in Nranges:
         N = int(N)
@@ -93,6 +100,10 @@ def main():
         msg = f"\tBaseline: {int(solution.num_steps):,} steps ({int(total_memory):,} MB) in {count1:.1f}s"
         print(msg)
 
+        results_textbook["N"].append(N)
+        results_textbook["memory"].append(total_memory)
+        results_textbook["num_steps"].append(solution.num_steps)
+
         # not 8000 because other processes must run as well (but this limit isn't tight)...
         if total_memory < 4000:
             strategy_ = ivpsolvers.strategy_smoother(ibm, ts0)
@@ -109,11 +120,7 @@ def main():
             count1 = time.perf_counter() - count0
             size_sol = jax.flatten_util.ravel_pytree(solution)[0].nbytes / 1024**2
             print(f"\tTextbook solver: {count1:.1f}s using {int(size_sol):,} MB")
-            results_textbook["N"].append(N)
             results_textbook["runtime"].append(count1)
-            results_textbook["memory"].append(total_memory)
-
-            results_textbook["num_steps"].append(jnp.amax(solution.num_steps))
 
         save_at = jnp.linspace(t0, t1, num=200)
         count0 = time.perf_counter()
