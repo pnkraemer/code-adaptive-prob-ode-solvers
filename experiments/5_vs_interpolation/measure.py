@@ -1,3 +1,5 @@
+"""Todo: what does this experiment say?"""
+
 import functools
 import time
 from typing import NamedTuple
@@ -57,7 +59,14 @@ class Runner:
         solution = ivpsolve.solve_adaptive_save_at(
             self.vf, self.init, save_at=save_at, dt0=0.01, adaptive_solver=asolver
         )
-        return IVPSolution(grid=solution.t, solution=solution.u)
+        # Sample from the posterior
+        key = jax.random.PRNGKey(1)
+        posterior = stats.markov_select_terminal(solution.posterior)
+        (qoi, samples), (init, _) = stats.markov_sample(
+            key, posterior, shape=(10,), reverse=True
+        )
+        qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
+        return IVPSolution(grid=save_at, solution=qoi.mean(axis=0))
 
     def runtime(self):
         cts = []
@@ -91,12 +100,20 @@ class RunnerTextbook:
         self.solve = None
 
     def prepare(self, *, tol, save_at):
-        small_value = 1e-10
+        # Move the boundary slightly because offgrid_marginals
+        #  can only work with off-grid measurements.
+        small_value = jnp.sqrt(jnp.finfo(save_at.dtype).eps)
         t0 = save_at[0] - small_value
         t1 = save_at[-1] + small_value
+
+        # Compute an adaptive solution to know which grid-points we want
         adaptive = self._solve_adaptive(tol=tol, t0=t0, t1=t1)
-        print(len(adaptive.grid))
-        solve = functools.partial(self._solve, grid=adaptive.grid, save_at=save_at)
+
+        # Add the save_at points the adaptive solution
+        #  to emulate a "tstops" argument
+        grid = jnp.union1d(adaptive.grid, save_at)
+        grid = jnp.sort(grid)
+        solve = functools.partial(self._solve, grid=grid, save_at=save_at)
         self.solve = jax.jit(solve)
         return self.solve()
 
@@ -108,13 +125,22 @@ class RunnerTextbook:
         return IVPSolution(grid=solution.t, solution=solution.u)
 
     def _solve(self, grid, save_at):
-        sol = ivpsolve.solve_fixed_grid(
+        solution = ivpsolve.solve_fixed_grid(
             self.vf, self.init, grid=grid, solver=self.solver
         )
-        dense, _ = stats.offgrid_marginals_searchsorted(
-            ts=save_at, solution=sol, solver=self.solver
+        # Sample from the posterior
+        key = jax.random.PRNGKey(1)
+        posterior = stats.markov_select_terminal(solution.posterior)
+        (qoi, samples), (init, _) = stats.markov_sample(
+            key, posterior, shape=(10,), reverse=True
         )
-        return IVPSolution(grid=save_at, solution=dense)
+        qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
+
+        # Find indices of save_at in grid
+        _, _, indices = jnp.intersect1d(
+            save_at, grid, size=len(save_at), return_indices=True
+        )
+        return IVPSolution(grid=save_at, solution=qoi[:, indices, :].mean(axis=0))
 
     def runtime(self):
         cts = []
@@ -137,17 +163,17 @@ def main():
 
     # Set up the solver
     impl.select("blockdiag", ode_shape=(2,))
-    baseline = solve_baseline(*ivp, tol=1e-3, ode_order=2, num_derivs=5)
+    baseline = solve_baseline(*ivp, tol=1e-3, ode_order=2, num_derivs=3)
     # plt.plot(*baseline.solution.T)
     # plt.show()
 
-    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=5, which="fixedpoint")
-    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=5)
+    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, which="fixedpoint")
+    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=3)
 
-    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid), num=50)
-    reference = checkpoint_fixpt.prepare(tol=1e-11, save_at=save_at)
+    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid))
+    reference = checkpoint_fixpt.prepare(tol=1e-12, save_at=save_at)
 
-    tols = 10.0 ** (-jnp.arange(1, 11, step=2))
+    tols = 10.0 ** (-jnp.arange(2, 8, step=1))
     for alg in [textbook, checkpoint_fixpt]:
         for tol in tols:
             approximation = alg.prepare(tol=tol, save_at=save_at)
