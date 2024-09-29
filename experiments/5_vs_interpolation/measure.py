@@ -5,7 +5,7 @@
 
 import functools
 import time
-from typing import NamedTuple
+from typing import NamedTuple, Callable
 
 import jax
 import jax.numpy as jnp
@@ -29,17 +29,23 @@ class IVPSolution(NamedTuple):
 
 
 class Runner:
-    def __init__(self, vf, init, tspan, /, *, ode_order: int, num_derivs: int, which):
+    def __init__(
+        self,
+        vf,
+        init,
+        tspan,
+        /,
+        *,
+        ode_order: int,
+        num_derivs: int,
+        num_samples: int,
+    ):
         self.vf = vf
+        self.num_samples = num_samples
 
         ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
         ts0 = ivpsolvers.correction_ts0(ode_order=ode_order)
-        if which == "filter":
-            strategy = ivpsolvers.strategy_filter(ibm, ts0)
-        elif which == "fixedpoint":
-            strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
-        else:
-            raise ValueError
+        strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
         self.solver = ivpsolvers.solver(strategy)
         self.ctrl = ivpsolve.control_proportional_integral()
 
@@ -66,26 +72,26 @@ class Runner:
         key = jax.random.PRNGKey(1)
         posterior = stats.markov_select_terminal(solution.posterior)
         (qoi, samples), (init, _) = stats.markov_sample(
-            key, posterior, shape=(100,), reverse=True
+            key, posterior, shape=(self.num_samples,), reverse=True
         )
         qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
         return IVPSolution(grid=save_at, solution=qoi.mean(axis=0))
 
-    def runtime(self):
-        cts = []
-        for _ in range(3):
-            t0 = time.perf_counter()
-            sol = self.solve()
-            sol.grid.block_until_ready()
-            sol.solution.block_until_ready()
-            t1 = time.perf_counter()
-            cts.append(t1 - t0)
-        return min(cts)
-
 
 class RunnerTextbook:
-    def __init__(self, vf, init, tspan, /, *, ode_order: int, num_derivs: int):
+    def __init__(
+        self,
+        vf,
+        init,
+        tspan,
+        /,
+        *,
+        ode_order: int,
+        num_derivs: int,
+        num_samples: int,
+    ):
         self.vf = vf
+        self.num_samples = num_samples
 
         ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
         ts0 = ivpsolvers.correction_ts0(ode_order=ode_order)
@@ -131,7 +137,7 @@ class RunnerTextbook:
         key = jax.random.PRNGKey(1)
         posterior = stats.markov_select_terminal(solution.posterior)
         (qoi, samples), (init, _) = stats.markov_sample(
-            key, posterior, shape=(100,), reverse=True
+            key, posterior, shape=(self.num_samples,), reverse=True
         )
         qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
 
@@ -140,17 +146,6 @@ class RunnerTextbook:
             save_at, grid, size=len(save_at), return_indices=True
         )
         return IVPSolution(grid=save_at, solution=qoi[:, indices, :].mean(axis=0))
-
-    def runtime(self):
-        cts = []
-        for _ in range(3):
-            t0 = time.perf_counter()
-            sol = self.solve()
-            sol.grid.block_until_ready()
-            sol.solution.block_until_ready()
-            t1 = time.perf_counter()
-            cts.append(t1 - t0)
-        return min(cts)
 
 
 def main():
@@ -163,12 +158,13 @@ def main():
 
     # Set up the solver
     impl.select("isotropic", ode_shape=(2,))
-    # baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=5)
+    # baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=3)
     # plt.plot(*baseline.solution.T)
     # plt.show()
 
-    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=5, which="fixedpoint")
-    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=5)
+    num_samples = 1
+    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, num_samples=num_samples)
+    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=3, num_samples=num_samples)
 
     save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
     reference = checkpoint_fixpt.prepare(tol=1e-12, save_at=save_at)
@@ -177,9 +173,9 @@ def main():
     for alg in [textbook, checkpoint_fixpt]:
         for tol in tols:
             approximation = alg.prepare(tol=tol, save_at=save_at)
-            runtime = alg.runtime()
+            tm = runtime(alg.solve, num_runs=1)
             accuracy = error(approximation.solution, reference.solution)
-            print(f"tol={tol:.0e}, time={runtime:.3f}s, acc={accuracy:.2e}")
+            print(f"tol={tol:.0e}, time={tm:.3f}s, acc={accuracy:.2e}")
         print()
 
 
@@ -203,6 +199,18 @@ def solve_baseline(vf, init, tspan, /, *, tol: float, ode_order: int, num_derivs
         vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
     )
     return IVPSolution(grid=solution.t, solution=solution.u)
+
+
+def runtime(function: Callable, num_runs: int):
+    cts = []
+    for _ in range(num_runs):
+        t0 = time.perf_counter()
+        sol = function()
+        sol.grid.block_until_ready()
+        sol.solution.block_until_ready()
+        t1 = time.perf_counter()
+        cts.append(t1 - t0)
+    return min(cts)
 
 
 def error(a, b):
