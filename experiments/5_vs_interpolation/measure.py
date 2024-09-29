@@ -37,14 +37,14 @@ class Runner:
             strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
         else:
             raise ValueError
-        self.solver = ivpsolvers.solver_dynamic(strategy)
+        self.solver = ivpsolvers.solver(strategy)
         self.ctrl = ivpsolve.control_proportional_integral()
 
         # Set up the initial condition
         t0, t1 = tspan
         num = num_derivs + 1 - ode_order
         tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0), init, num=num)
-        output_scale = jnp.ones((2,), dtype=float)
+        output_scale = jnp.ones((), dtype=float)
         self.init = self.solver.initial_condition(tcoeffs, output_scale)
 
         self.solve = None
@@ -87,32 +87,28 @@ class RunnerTextbook:
         ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
         ts0 = ivpsolvers.correction_ts0(ode_order=ode_order)
         strategy = ivpsolvers.strategy_smoother(ibm, ts0)
-        self.solver = ivpsolvers.solver_dynamic(strategy)
+        self.solver = ivpsolvers.solver(strategy)
         self.ctrl = ivpsolve.control_proportional_integral()
 
         # Set up the initial condition
         t0, t1 = tspan
         num = num_derivs + 1 - ode_order
         tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0), init, num=num)
-        output_scale = jnp.ones((2,), dtype=float)
+        output_scale = jnp.ones((), dtype=float)
         self.init = self.solver.initial_condition(tcoeffs, output_scale)
 
         self.solve = None
 
     def prepare(self, *, tol, save_at):
-        # Move the boundary slightly because offgrid_marginals
-        #  can only work with off-grid measurements.
-        small_value = jnp.sqrt(jnp.finfo(save_at.dtype).eps)
-        t0 = save_at[0] - small_value
-        t1 = save_at[-1] + small_value
-
-        # Compute an adaptive solution to know which grid-points we want
+        t0 = save_at[0]
+        t1 = save_at[-1]
         adaptive = self._solve_adaptive(tol=tol, t0=t0, t1=t1)
 
         # Add the save_at points the adaptive solution
         #  to emulate a "tstops" argument
         grid = jnp.union1d(adaptive.grid, save_at)
         grid = jnp.sort(grid)
+
         solve = functools.partial(self._solve, grid=grid, save_at=save_at)
         self.solve = jax.jit(solve)
         return self.solve()
@@ -162,15 +158,15 @@ def main():
     ivp = ivps.three_body_restricted()
 
     # Set up the solver
-    impl.select("blockdiag", ode_shape=(2,))
-    baseline = solve_baseline(*ivp, tol=1e-3, ode_order=2, num_derivs=3)
+    impl.select("isotropic", ode_shape=(2,))
+    # baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=3)
     # plt.plot(*baseline.solution.T)
     # plt.show()
 
     checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, which="fixedpoint")
     textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=3)
 
-    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid))
+    save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
     reference = checkpoint_fixpt.prepare(tol=1e-12, save_at=save_at)
 
     tols = 10.0 ** (-jnp.arange(2, 8, step=1))
@@ -187,13 +183,13 @@ def solve_baseline(vf, init, tspan, /, *, tol: float, ode_order: int, num_derivs
     ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
     ts0 = ivpsolvers.correction_ts0(ode_order=ode_order)
     strategy = ivpsolvers.strategy_filter(ibm, ts0)
-    solver = ivpsolvers.solver_dynamic(strategy)
+    solver = ivpsolvers.solver(strategy)
 
     # Set up the initial condition
     t0, t1 = tspan
     num = num_derivs + 1 - ode_order
     tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0), init, num=num)
-    output_scale = jnp.ones((2,), dtype=float)
+    output_scale = jnp.ones((), dtype=float)
     init = solver.initial_condition(tcoeffs, output_scale)
 
     # Compute a baseline solution
