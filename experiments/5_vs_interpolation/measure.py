@@ -23,13 +23,18 @@ class IVPSolution(NamedTuple):
         return len(self.steps)
 
 
-class RunnerCheckpt:
-    def __init__(self, vf, init, tspan, /, *, ode_order: int, num_derivs: int):
+class Runner:
+    def __init__(self, vf, init, tspan, /, *, ode_order: int, num_derivs: int, which):
         self.vf = vf
 
         ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
         ts0 = ivpsolvers.correction_ts0(ode_order=ode_order)
-        strategy = ivpsolvers.strategy_filter(ibm, ts0)
+        if which == "filter":
+            strategy = ivpsolvers.strategy_filter(ibm, ts0)
+        elif which == "fixedpoint":
+            strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
+        else:
+            raise ValueError
         self.solver = ivpsolvers.solver_dynamic(strategy)
         self.ctrl = ivpsolve.control_proportional_integral()
 
@@ -76,13 +81,20 @@ def main():
     # plt.plot(*baseline.solution.T)
     # plt.show()
 
+    checkpoint_filter = Runner(*ivp, ode_order=2, num_derivs=3, which="filter")
+    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, which="fixedpoint")
+
     save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid))
-    checkpoint = RunnerCheckpt(*ivp, ode_order=2, num_derivs=3)
-    tols = 10.0 ** (-jnp.arange(3, 8, step=1))
-    for tol in tols:
-        _solution = checkpoint.prepare(tol=tol, save_at=save_at)
-        runtime = checkpoint.runtime()
-        print(tol, runtime)
+    reference = checkpoint_fixpt.prepare(tol=1e-11, save_at=save_at)
+
+    tols = 10.0 ** (-jnp.arange(3, 11, step=1))
+    for checkpoint in [checkpoint_filter, checkpoint_fixpt]:
+        for tol in tols:
+            approximation = checkpoint.prepare(tol=tol, save_at=save_at)
+            runtime = checkpoint.runtime()
+            accuracy = error(approximation.solution, reference.solution)
+            print(f"tol={tol:.0e}, time={runtime:.2f}s, acc={accuracy:.3e}")
+        print()
 
 
 def solve_baseline(vf, init, tspan, /, *, tol: float, ode_order: int, num_derivs: int):
@@ -105,6 +117,10 @@ def solve_baseline(vf, init, tspan, /, *, tol: float, ode_order: int, num_derivs
         vf, init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=adaptive_solver
     )
     return IVPSolution(grid=solution.t, solution=solution.u)
+
+
+def error(a, b):
+    return jnp.linalg.norm(a - b) / jnp.sqrt(b.size)
 
 
 if __name__ == "__main__":
