@@ -29,6 +29,18 @@ def rigid_body(*, time_span=(0.0, 10.0)):
     return vf, (u0,), time_span, args
 
 
+def three_body_restricted():
+    if not backend.has_been_selected:
+        backend.select("jax")
+
+    f, u0s, time_span, args = ivps.three_body_restricted()
+
+    def vf(*u, t, p=()):
+        return f(*u, *args)
+
+    return vf, u0s, time_span
+
+
 def pleiades_1st():
     if not backend.has_been_selected:
         backend.select("jax")
