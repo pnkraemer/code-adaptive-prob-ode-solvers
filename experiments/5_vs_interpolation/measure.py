@@ -4,7 +4,7 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
-from probdiffeq import ivpsolve, ivpsolvers, taylor
+from probdiffeq import ivpsolve, ivpsolvers, taylor, stats
 from probdiffeq.impl import impl
 
 from odecheckpts import ivps
@@ -68,6 +68,59 @@ class Runner:
         return t1 - t0
 
 
+class RunnerTextbook:
+    def __init__(self, vf, init, tspan, /, *, ode_order: int, num_derivs: int):
+        self.vf = vf
+
+        ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
+        ts0 = ivpsolvers.correction_ts0(ode_order=ode_order)
+        strategy = ivpsolvers.strategy_smoother(ibm, ts0)
+        self.solver = ivpsolvers.solver_dynamic(strategy)
+        self.ctrl = ivpsolve.control_proportional_integral()
+
+        # Set up the initial condition
+        t0, t1 = tspan
+        num = num_derivs + 1 - ode_order
+        tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0), init, num=num)
+        output_scale = jnp.ones((2,), dtype=float)
+        self.init = self.solver.initial_condition(tcoeffs, output_scale)
+
+        self.solve = None
+
+    def prepare(self, *, tol, save_at):
+        small_value = 1e-10
+        t0 = save_at[0] - small_value
+        t1 = save_at[-1] + small_value
+        adaptive = self._solve_adaptive(tol=tol, t0=t0, t1=t1)
+        solve = functools.partial(self._solve, grid=adaptive.grid, save_at=save_at)
+        self.solve = jax.jit(solve)
+        return self.solve()
+
+    def _solve_adaptive(self, *, tol, t0, t1):
+        asolver = ivpsolve.adaptive(self.solver, atol=tol, rtol=tol, control=self.ctrl)
+        solution = ivpsolve.solve_adaptive_save_every_step(
+            self.vf, self.init, t0=t0, t1=t1, dt0=0.01, adaptive_solver=asolver
+        )
+        return IVPSolution(grid=solution.t, solution=solution.u)
+
+    def _solve(self, grid, save_at):
+        sol = ivpsolve.solve_fixed_grid(
+            self.vf, self.init, grid=grid, solver=self.solver
+        )
+        dense, _ = stats.offgrid_marginals_searchsorted(
+            ts=save_at, solution=sol, solver=self.solver
+        )
+        return IVPSolution(grid=save_at, solution=dense)
+
+    def runtime(self):
+        t0 = time.perf_counter()
+        sol = self.solve()
+        sol.grid.block_until_ready()
+        sol.solution.block_until_ready()
+        t1 = time.perf_counter()
+        return t1 - t0
+
+
 def main():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
@@ -77,23 +130,23 @@ def main():
 
     # Set up the solver
     impl.select("blockdiag", ode_shape=(2,))
-    baseline = solve_baseline(*ivp, tol=1e-3, ode_order=2, num_derivs=3)
+    baseline = solve_baseline(*ivp, tol=1e-3, ode_order=2, num_derivs=5)
     # plt.plot(*baseline.solution.T)
     # plt.show()
 
-    checkpoint_filter = Runner(*ivp, ode_order=2, num_derivs=3, which="filter")
-    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, which="fixedpoint")
+    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=5, which="fixedpoint")
+    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=5)
 
-    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid))
+    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid), num=7)
     reference = checkpoint_fixpt.prepare(tol=1e-11, save_at=save_at)
 
-    tols = 10.0 ** (-jnp.arange(3, 11, step=1))
-    for checkpoint in [checkpoint_filter, checkpoint_fixpt]:
+    tols = 10.0 ** (-jnp.arange(1, 11, step=2))
+    for alg in [textbook, checkpoint_fixpt]:
         for tol in tols:
-            approximation = checkpoint.prepare(tol=tol, save_at=save_at)
-            runtime = checkpoint.runtime()
+            approximation = alg.prepare(tol=tol, save_at=save_at)
+            runtime = alg.runtime()
             accuracy = error(approximation.solution, reference.solution)
-            print(f"tol={tol:.0e}, time={runtime:.2f}s, acc={accuracy:.3e}")
+            print(f"tol={tol:.0e}, time={runtime:.1e}s, acc={accuracy:.2e}")
         print()
 
 
