@@ -60,12 +60,15 @@ class Runner:
         return IVPSolution(grid=solution.t, solution=solution.u)
 
     def runtime(self):
-        t0 = time.perf_counter()
-        sol = self.solve()
-        sol.grid.block_until_ready()
-        sol.solution.block_until_ready()
-        t1 = time.perf_counter()
-        return t1 - t0
+        cts = []
+        for _ in range(3):
+            t0 = time.perf_counter()
+            sol = self.solve()
+            sol.grid.block_until_ready()
+            sol.solution.block_until_ready()
+            t1 = time.perf_counter()
+            cts.append(t1 - t0)
+        return min(cts)
 
 
 class RunnerTextbook:
@@ -92,6 +95,7 @@ class RunnerTextbook:
         t0 = save_at[0] - small_value
         t1 = save_at[-1] + small_value
         adaptive = self._solve_adaptive(tol=tol, t0=t0, t1=t1)
+        print(len(adaptive.grid))
         solve = functools.partial(self._solve, grid=adaptive.grid, save_at=save_at)
         self.solve = jax.jit(solve)
         return self.solve()
@@ -113,12 +117,15 @@ class RunnerTextbook:
         return IVPSolution(grid=save_at, solution=dense)
 
     def runtime(self):
-        t0 = time.perf_counter()
-        sol = self.solve()
-        sol.grid.block_until_ready()
-        sol.solution.block_until_ready()
-        t1 = time.perf_counter()
-        return t1 - t0
+        cts = []
+        for _ in range(3):
+            t0 = time.perf_counter()
+            sol = self.solve()
+            sol.grid.block_until_ready()
+            sol.solution.block_until_ready()
+            t1 = time.perf_counter()
+            cts.append(t1 - t0)
+        return min(cts)
 
 
 def main():
@@ -137,7 +144,7 @@ def main():
     checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=5, which="fixedpoint")
     textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=5)
 
-    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid), num=7)
+    save_at = jnp.linspace(jnp.amin(baseline.grid), jnp.amax(baseline.grid), num=50)
     reference = checkpoint_fixpt.prepare(tol=1e-11, save_at=save_at)
 
     tols = 10.0 ** (-jnp.arange(1, 11, step=2))
@@ -146,7 +153,7 @@ def main():
             approximation = alg.prepare(tol=tol, save_at=save_at)
             runtime = alg.runtime()
             accuracy = error(approximation.solution, reference.solution)
-            print(f"tol={tol:.0e}, time={runtime:.1e}s, acc={accuracy:.2e}")
+            print(f"tol={tol:.0e}, time={runtime:.3f}s, acc={accuracy:.2e}")
         print()
 
 
