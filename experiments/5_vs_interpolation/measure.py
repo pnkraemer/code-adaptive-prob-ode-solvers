@@ -1,4 +1,7 @@
-"""Todo: what does this experiment say?"""
+# message: whatever happens, we're doing okay even against the cheater.
+# we win if num_samples is large.
+# we lose if it is small.
+# in either case, the difference is less than 2x for reasonable configs.
 
 import functools
 import time
@@ -63,7 +66,7 @@ class Runner:
         key = jax.random.PRNGKey(1)
         posterior = stats.markov_select_terminal(solution.posterior)
         (qoi, samples), (init, _) = stats.markov_sample(
-            key, posterior, shape=(10,), reverse=True
+            key, posterior, shape=(100,), reverse=True
         )
         qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
         return IVPSolution(grid=save_at, solution=qoi.mean(axis=0))
@@ -128,7 +131,7 @@ class RunnerTextbook:
         key = jax.random.PRNGKey(1)
         posterior = stats.markov_select_terminal(solution.posterior)
         (qoi, samples), (init, _) = stats.markov_sample(
-            key, posterior, shape=(10,), reverse=True
+            key, posterior, shape=(100,), reverse=True
         )
         qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
 
@@ -155,16 +158,17 @@ def main():
     jax.config.update("jax_enable_x64", True)
 
     # Set up the IVP
+    # ivp = ivps.van_der_pol(mu=1000)
     ivp = ivps.three_body_restricted()
 
     # Set up the solver
     impl.select("isotropic", ode_shape=(2,))
-    # baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=3)
+    # baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=5)
     # plt.plot(*baseline.solution.T)
     # plt.show()
 
-    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, which="fixedpoint")
-    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=3)
+    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=5, which="fixedpoint")
+    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=5)
 
     save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
     reference = checkpoint_fixpt.prepare(tol=1e-12, save_at=save_at)

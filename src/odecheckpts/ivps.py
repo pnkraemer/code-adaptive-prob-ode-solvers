@@ -81,7 +81,7 @@ def _pleiades():
     t0, t1 = 0.0, 3.0
 
     @jax.jit
-    def vf(u, du, *, t, p):  # noqa: ARG001
+    def vf(u, du, *, t, p=()):  # noqa: ARG001
         """Pleiades problem."""
         x = u[0:7]  # x
         y = u[7:14]  # y
@@ -96,7 +96,7 @@ def _pleiades():
         ddy = jnp.sum(jnp.nan_to_num(mj * (yj - yi) / rij), axis=1)
         return jnp.concatenate((ddx, ddy))
 
-    return vf, (u0, du0), (t0, t1), ()
+    return vf, (u0, du0), (t0, t1)
 
 
 def neural_ode_mlp(*, layer_sizes: tuple):
@@ -154,3 +154,14 @@ def brusselator(N, t0=0.0, tmax=10.0):
     y0 = jnp.concatenate([u0, v0])
 
     return f, (y0,), (t0, tmax), ()
+
+
+def van_der_pol(mu=10.0**3):
+    def vf(y, ydot, *, t, p=()):  # noqa: ARG001
+        """Evaluate the vector field."""
+        return mu * (ydot * (1 - y**2) - y)
+
+    u0 = jnp.asarray([2.0])
+    du0 = jnp.asarray([0.0])
+    t0, t1 = 0.0, 6.3
+    return vf, (u0, du0), (t0, t1)
