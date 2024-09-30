@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from probdiffeq.backend import control_flow
 from probdiffeq import ivpsolvers, taylor, ivpsolve, stats
 from probdiffeq.impl import impl
+import optax
 
 from odecheckpts import ivps
 
@@ -18,8 +19,10 @@ def main():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
-    vf, u0, (t0, t1) = ivps.van_der_pol()
-    solve = make_solve(vf, num_derivs=5, ode_order=2, tol=1e-5)
+    vf, u0, (t0, t1) = ivps.van_der_pol(mu=10)
+    solve = make_solve(vf, num_derivs=4, ode_order=2, tol=1e-4)
+
+    print(u0)
 
     # Build the noise model
     key = jax.random.PRNGKey(1)
@@ -34,20 +37,36 @@ def main():
     noise = std * jax.random.normal(subkey, shape=solution.u.shape)
     data = solution.u + noise
 
-    solve_ = functools.partial(solve, save_at=save_at_data)
-    std_ = jnp.ones_like(save_at_data) * std
-    loss = make_loss(data=data, solve=solve_, std=std_)
-    print(loss(u0))
-
     # Compute the truth (again, but at higher resolution for plotting)
     save_at_plot = jnp.linspace(t0, t1, endpoint=True, num=200)
     solution_plot = solve(u0, save_at=save_at_plot)
+
+    # Build a loss function
+    solve_ = functools.partial(solve, save_at=save_at_data)
+    std_ = jnp.ones_like(save_at_data) * std
+    loss = make_loss(data=data, solve=solve_, std=std_)
+    loss = jax.jit(jax.value_and_grad(loss))
 
     # Create an initial guess
     key, subkey = jax.random.split(key, num=2)
     u0_random = tree_random_like(subkey, u0)
     guess_plot = solve(u0_random, save_at=save_at_plot)
 
+    # Optimizer
+    optim = optax.adam(learning_rate=1e-2)
+    opt_state = optim.init(u0_random)
+
+    for _ in range(1_000):
+        val, grads = loss(u0_random)
+
+        updates, opt_state = optim.update(grads, opt_state)
+        u0_random = optax.apply_updates(u0_random, updates)
+
+        print("val", val)
+        print("grads", grads)
+        print("u0", u0_random)
+        print()
+    assert False
     # Plot
     fig, ax = plt.subplots(figsize=(5, 3))
     ax.plot(save_at_plot, *solution_plot.u.T, label="Truth", alpha=0.1, color="C0")
@@ -79,7 +98,7 @@ def make_solve(vf, *, num_derivs: int, ode_order: int, tol: float):
         asolver = ivpsolve.adaptive(solver, atol=tol, rtol=tol, control=ctrl)
         with control_flow.context_overwrite_while_loop(while_loop_func):
             solution = ivpsolve.solve_adaptive_save_at(
-                vf, init, save_at=save_at, dt0=0.01, adaptive_solver=asolver
+                vf, init, save_at=save_at, dt0=1.0, adaptive_solver=asolver
             )
 
         return solution
@@ -106,7 +125,7 @@ def tree_random_like(key, tree):
 
 def while_loop_func(*a, **kw):
     """Evaluate a bounded while loop."""
-    return equinox.internal.while_loop(*a, **kw, kind="bounded", max_steps=10_000)
+    return equinox.internal.while_loop(*a, **kw, kind="bounded", max_steps=1_000)
 
 
 if __name__ == "__main__":
