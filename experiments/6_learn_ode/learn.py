@@ -17,32 +17,39 @@ def main():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
-    # plt.rcParams.update(exp_util.plot_params())
-    # Parameters
-    num_epochs = 10
-
     vf, u0, (t0, t1) = ivps.van_der_pol()
-
-    save_at = jnp.linspace(t0, t1, endpoint=True, num=10)
     solve = make_solve(vf, num_derivs=5, ode_order=2, tol=1e-5)
-    solution = solve(u0, save_at=save_at)
 
+    # Build the noise model
     key = jax.random.PRNGKey(1)
     std = 0.1
-    noise = std * jax.random.normal(key, shape=solution.u.shape)
+
+    # Generate the truth
+    save_at_data = jnp.linspace(t0, t1, endpoint=True, num=10)
+    solution = solve(u0, save_at=save_at_data)
+
+    # Generate the data
+    key, subkey = jax.random.split(key, num=2)
+    noise = std * jax.random.normal(subkey, shape=solution.u.shape)
     data = solution.u + noise
 
+    # Compute the truth (again, but at higher resolution for plotting)
     save_at_plot = jnp.linspace(t0, t1, endpoint=True, num=200)
     solution_plot = solve(u0, save_at=save_at_plot)
 
-    fig, ax = plt.subplots(figsize=(5, 3))
-    ax.plot(save_at_plot, *solution_plot.u.T)
+    # Create an initial guess
+    key, subkey = jax.random.split(key, num=2)
+    u0_random = tree_random_like(subkey, u0)
+    guess_plot = solve(u0_random, save_at=save_at_plot)
 
-    for t, d in zip(save_at, data.squeeze()):
-        circle = plt.Circle(
-            (t, d), 2 * std, edgecolor="C0", facecolor="white", linewidth=1.0
-        )
-        ax.add_patch(circle)
+    # Plot
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.plot(save_at_plot, *solution_plot.u.T, label="Truth", alpha=0.1, color="C0")
+    ax.plot(save_at_plot, *guess_plot.u.T, label="Initial guess", color="C1")
+
+    ax.errorbar(save_at_data, *data.T, yerr=std * 3, linestyle="None", color="C0")
+
+    plt.legend()
 
     plt.show()
 
@@ -57,7 +64,7 @@ def make_solve(vf, *, num_derivs: int, ode_order: int, tol: float):
 
     def solve(init, save_at):
         # Set up the initial condition
-        t0, t1 = save_at[0], save_at[-1]
+        t0, _t1 = save_at[0], save_at[-1]
         num = num_derivs + 1 - ode_order
         tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0), init, num=num)
         output_scale = jnp.ones((), dtype=float)
@@ -72,6 +79,12 @@ def make_solve(vf, *, num_derivs: int, ode_order: int, tol: float):
         return solution
 
     return solve
+
+
+def tree_random_like(key, tree):
+    flat, unflatten = jax.flatten_util.ravel_pytree(tree)
+    random = 10 * jax.random.normal(key, shape=flat.shape, dtype=flat.dtype)
+    return unflatten(random)
 
 
 def while_loop_func(*a, **kw):
