@@ -1,11 +1,12 @@
 """Train a neural ODE with ProbDiffEq and Optax."""
 
+import functools
 import equinox
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from probdiffeq.backend import control_flow
-from probdiffeq import ivpsolvers, taylor, ivpsolve
+from probdiffeq import ivpsolvers, taylor, ivpsolve, stats
 from probdiffeq.impl import impl
 
 from odecheckpts import ivps
@@ -33,6 +34,11 @@ def main():
     noise = std * jax.random.normal(subkey, shape=solution.u.shape)
     data = solution.u + noise
 
+    solve_ = functools.partial(solve, save_at=save_at_data)
+    std_ = jnp.ones_like(save_at_data) * std
+    loss = make_loss(data=data, solve=solve_, std=std_)
+    print(loss(u0))
+
     # Compute the truth (again, but at higher resolution for plotting)
     save_at_plot = jnp.linspace(t0, t1, endpoint=True, num=200)
     solution_plot = solve(u0, save_at=save_at_plot)
@@ -58,7 +64,7 @@ def make_solve(vf, *, num_derivs: int, ode_order: int, tol: float):
     impl.select("dense", ode_shape=(1,))
     ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
     ts1 = ivpsolvers.correction_ts1(ode_order=ode_order)
-    strategy = ivpsolvers.strategy_filter(ibm, ts1)
+    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts1)
     solver = ivpsolvers.solver(strategy)
     ctrl = ivpsolve.control_proportional_integral()
 
@@ -79,6 +85,17 @@ def make_solve(vf, *, num_derivs: int, ode_order: int, tol: float):
         return solution
 
     return solve
+
+
+def make_loss(data, solve, std):
+    def loss(init):
+        solution = solve(init)
+        lml = stats.log_marginal_likelihood(
+            data, standard_deviation=std, posterior=solution.posterior
+        )
+        return -1 * lml
+
+    return loss
 
 
 def tree_random_like(key, tree):
