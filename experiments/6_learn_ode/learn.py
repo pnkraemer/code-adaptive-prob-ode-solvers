@@ -10,24 +10,44 @@ from probdiffeq.impl import impl
 
 from odecheckpts import ivps
 
+import matplotlib.pyplot as plt
+
 
 def main():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
+    # plt.rcParams.update(exp_util.plot_params())
     # Parameters
     num_epochs = 10
 
     vf, u0, (t0, t1) = ivps.van_der_pol()
+
     save_at = jnp.linspace(t0, t1, endpoint=True, num=10)
-    solve = make_solve(vf, save_at=save_at, num_derivs=5, ode_order=2, tol=1e-2)
-    solution = solve(u0)
+    solve = make_solve(vf, num_derivs=5, ode_order=2, tol=1e-5)
+    solution = solve(u0, save_at=save_at)
 
-    print(solution)
-    assert False
+    key = jax.random.PRNGKey(1)
+    std = 0.1
+    noise = std * jax.random.normal(key, shape=solution.u.shape)
+    data = solution.u + noise
+
+    save_at_plot = jnp.linspace(t0, t1, endpoint=True, num=200)
+    solution_plot = solve(u0, save_at=save_at_plot)
+
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.plot(save_at_plot, *solution_plot.u.T)
+
+    for t, d in zip(save_at, data.squeeze()):
+        circle = plt.Circle(
+            (t, d), 2 * std, edgecolor="C0", facecolor="white", linewidth=1.0
+        )
+        ax.add_patch(circle)
+
+    plt.show()
 
 
-def make_solve(vf, *, save_at, num_derivs: int, ode_order: int, tol: float):
+def make_solve(vf, *, num_derivs: int, ode_order: int, tol: float):
     impl.select("dense", ode_shape=(1,))
     ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
     ts1 = ivpsolvers.correction_ts1(ode_order=ode_order)
@@ -35,11 +55,10 @@ def make_solve(vf, *, save_at, num_derivs: int, ode_order: int, tol: float):
     solver = ivpsolvers.solver(strategy)
     ctrl = ivpsolve.control_proportional_integral()
 
-    # Set up the initial condition
-    t0, t1 = save_at[0], save_at[-1]
-    num = num_derivs + 1 - ode_order
-
-    def solve(init):
+    def solve(init, save_at):
+        # Set up the initial condition
+        t0, t1 = save_at[0], save_at[-1]
+        num = num_derivs + 1 - ode_order
         tcoeffs = taylor.odejet_padded_scan(lambda *y: vf(*y, t=t0), init, num=num)
         output_scale = jnp.ones((), dtype=float)
         init = solver.initial_condition(tcoeffs, output_scale)
@@ -57,7 +76,7 @@ def make_solve(vf, *, save_at, num_derivs: int, ode_order: int, tol: float):
 
 def while_loop_func(*a, **kw):
     """Evaluate a bounded while loop."""
-    return equinox.internal.while_loop(*a, **kw, kind="bounded", max_steps=100)
+    return equinox.internal.while_loop(*a, **kw, kind="bounded", max_steps=10_000)
 
 
 if __name__ == "__main__":
