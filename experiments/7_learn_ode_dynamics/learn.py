@@ -16,25 +16,28 @@ from probdiffeq.impl import impl
 
 
 def main(
-    dataset_size=256,
-    batch_size=32,
+    dataset_size=64,
+    batch_size=1,
     lr_strategy=(3e-3, 3e-3),
-    steps_strategy=(500, 500),
+    steps_strategy=(500, 100),
     length_strategy=(0.1, 1),
     width_size=64,
     depth=2,
     seed=5678,
     plot=True,
-    print_every=10,
+    print_every=1,
+    data_resolution=100,
+    mode="probdiffeq",
 ):
+    jax.config.update("jax_enable_x64", True)
+
     key = jr.PRNGKey(seed)
     data_key, model_key, loader_key = jr.split(key, 3)
 
-    ts, ys = get_data(dataset_size, key=data_key)
+    ts, ys = get_data(dataset_size, key=data_key, resolution=data_resolution)
     _, length_size, data_size = ys.shape
 
-    impl.select("dense", ode_shape=ys[0, 0, ...].shape)
-    mode = "probdiffeq"
+    impl.select("isotropic", ode_shape=ys[0, 0, ...].shape)
     model = NeuralODE(data_size, width_size, depth, key=model_key, mode=mode)
 
     # Training loop like normal.
@@ -50,14 +53,16 @@ def main(
             return jnp.mean((yi - y_pred.ys) ** 2)
         if mode == "probdiffeq":
             y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0])
-            stds = jnp.ones_like(ti) * 1e-5
+
+            stds = jnp.ones_like(ti) * model.std
             lmls = jax.vmap(
                 lambda a, b, c: stats.log_marginal_likelihood(
                     a, standard_deviation=b, posterior=c
                 ),
                 in_axes=(0, None, 0),
             )(yi, stds, y_pred.posterior)
-            return -1 * lmls.mean() / len(ti)
+            return -lmls.mean()
+
         raise ValueError
 
     @eqx.filter_jit
@@ -78,15 +83,21 @@ def main(
             start = time.time()
             loss, model, opt_state = make_step(_ts, yi, model, opt_state)
             end = time.time()
+
             if (step % print_every) == 0 or step == steps - 1:
-                print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
+                print(
+                    f"Step: {step}, Loss: {loss:.3e}, Time: {(end - start):.3e}, Sigma: {model.sigma:.3e}, Std: {model.std:.3e}"
+                )
 
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y = model(ts, ys[0, 0])
-        plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
-        plt.plot(ts, model_y[:, 1], c="crimson")
+        if mode == "diffrax":
+            model_y = model(ts, ys[0, 0]).ys
+        elif mode == "probdiffeq":
+            model_y = model(ts, ys[0, 0]).u
+        plt.plot(ts, model_y[:, 0], ".", c="crimson", label="Model")
+        plt.plot(ts, model_y[:, 1], ".", c="crimson")
         plt.legend()
         plt.tight_layout()
         plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
@@ -95,8 +106,8 @@ def main(
     return ts, ys, model
 
 
-def get_data(dataset_size, *, key):
-    ts = jnp.linspace(0, 10, 100)
+def get_data(dataset_size, *, key, resolution):
+    ts = jnp.linspace(0, 10, num=resolution)
     key = jr.split(key, dataset_size)
     ys = jax.vmap(lambda key: _get_data(ts, key=key))(key)
     return ts, ys
@@ -141,12 +152,29 @@ class NeuralODE(eqx.Module):
     func: Func
     mode: str
 
+    # Trainable solver-parameters
+    # _sigma: jax.Array
+    _std: jax.Array
+
     def __init__(self, data_size, width_size, depth, *, key, mode, **kwargs):
         super().__init__(**kwargs)
         self.mode = mode
         self.func = Func(data_size, width_size, depth, key=key)
 
+        # self._sigma = 1.0 * jnp.ones((), dtype=float)
+        self._std = -5 * jnp.ones((), dtype=float)
+
+    @property
+    def sigma(self):
+        return 1.0
+        # return self._sigma
+
+    @property
+    def std(self):
+        return 10.0**self._std
+
     def __call__(self, ts, y0):
+        atol, rtol = 1e-2, 1e-2
         if self.mode == "diffrax":
             solution = diffrax.diffeqsolve(
                 diffrax.ODETerm(self.func),
@@ -155,15 +183,15 @@ class NeuralODE(eqx.Module):
                 t1=ts[-1],
                 dt0=ts[1] - ts[0],
                 y0=y0,
-                stepsize_controller=diffrax.PIDController(rtol=1e-3, atol=1e-6),
+                stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
                 saveat=diffrax.SaveAt(ts=ts),
             )
             return solution
         if self.mode == "probdiffeq":
-            num_derivs = 2
+            num_derivs = 4
             ode_order = 1
             ibm = ivpsolvers.prior_ibm(num_derivatives=num_derivs)
-            ts1 = ivpsolvers.correction_ts1(ode_order=ode_order)
+            ts1 = ivpsolvers.correction_ts0(ode_order=ode_order)
             strategy = ivpsolvers.strategy_fixedpoint(ibm, ts1)
             solver = ivpsolvers.solver(strategy)
             ctrl = ivpsolve.control_proportional_integral()
@@ -174,10 +202,10 @@ class NeuralODE(eqx.Module):
             tcoeffs = taylor.odejet_unroll(
                 lambda y: self.func(t0, y, args=()), [y0], num=num
             )
-            output_scale = jnp.ones((), dtype=float)
+            output_scale = self.sigma * jnp.ones((), dtype=float)
             init = solver.initial_condition(tcoeffs, output_scale)
 
-            asolver = ivpsolve.adaptive(solver, atol=1e-4, rtol=1e-2, control=ctrl)
+            asolver = ivpsolve.adaptive(solver, atol=atol, rtol=rtol, control=ctrl)
 
             def vf(y, *, t):
                 return self.func(t, y, args=())
