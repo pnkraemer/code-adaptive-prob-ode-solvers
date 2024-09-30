@@ -5,11 +5,11 @@
 
 import functools
 import time
-from typing import NamedTuple, Callable
+from typing import Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
-from probdiffeq import ivpsolve, ivpsolvers, taylor, stats
+from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.impl import impl
 
 from odecheckpts import ivps
@@ -28,7 +28,7 @@ class IVPSolution(NamedTuple):
         return len(self.steps)
 
 
-class Runner:
+class RunnerCheckpoint:
     def __init__(
         self,
         vf,
@@ -58,7 +58,7 @@ class Runner:
 
         self.solve = None
 
-    def prepare(self, *, tol, save_at):
+    def prepare_and_solve(self, *, tol, save_at):
         solve = functools.partial(self._solve, tol=tol, save_at=save_at)
         self.solve = jax.jit(solve)
         return self.solve()
@@ -108,7 +108,7 @@ class RunnerTextbook:
 
         self.solve = None
 
-    def prepare(self, *, tol, save_at):
+    def prepare_and_solve(self, *, tol, save_at):
         t0 = save_at[0]
         t1 = save_at[-1]
         adaptive = self._solve_adaptive(tol=tol, t0=t0, t1=t1)
@@ -163,16 +163,18 @@ def main():
     # plt.show()
 
     num_samples = 1
-    checkpoint_fixpt = Runner(*ivp, ode_order=2, num_derivs=3, num_samples=num_samples)
+    checkpoint = RunnerCheckpoint(
+        *ivp, ode_order=2, num_derivs=3, num_samples=num_samples
+    )
     textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=3, num_samples=num_samples)
 
     save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
-    reference = checkpoint_fixpt.prepare(tol=1e-12, save_at=save_at)
+    reference = checkpoint.prepare_and_solve(tol=1e-12, save_at=save_at)
 
-    tols = 10.0 ** (-jnp.arange(2, 8, step=1))
-    for alg in [textbook, checkpoint_fixpt]:
+    tols = 10.0 ** (-jnp.arange(2, 12, step=2))
+    for alg in [textbook, checkpoint]:
         for tol in tols:
-            approximation = alg.prepare(tol=tol, save_at=save_at)
+            approximation = alg.prepare_and_solve(tol=tol, save_at=save_at)
             tm = runtime(alg.solve, num_runs=1)
             accuracy = error(approximation.solution, reference.solution)
             print(f"tol={tol:.0e}, time={tm:.3f}s, acc={accuracy:.2e}")

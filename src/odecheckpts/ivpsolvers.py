@@ -14,7 +14,7 @@ from probdiffeq.impl import impl
 def solve(
     method: str,
     vf,
-    u0_like,
+    u0_like: tuple,
     /,
     save_at,
     *,
@@ -30,7 +30,7 @@ def solve(
         warnings.simplefilter("ignore")
 
         implementation = "isotropic"
-        impl.select(implementation, ode_shape=u0_like.shape)
+        impl.select(implementation, ode_shape=u0_like[0].shape)
 
     num_derivatives = int(method[-1])
     if method[:3] == "ts0":

@@ -3,7 +3,7 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 import optax
-from probdiffeq.solvers import solution
+from probdiffeq import stats
 
 
 def loss(solver: Callable, unflatten: Callable):
@@ -19,7 +19,7 @@ def loss(solver: Callable, unflatten: Callable):
         posterior = info["solution"].posterior
 
         observation_std = jnp.ones_like(X) * stdev
-        marginal_likelihood = solution.log_marginal_likelihood(
+        marginal_likelihood = stats.log_marginal_likelihood(
             y[:, None], standard_deviation=observation_std, posterior=posterior
         )
         return -1 * marginal_likelihood
