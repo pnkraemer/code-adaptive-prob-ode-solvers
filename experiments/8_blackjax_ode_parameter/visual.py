@@ -31,7 +31,9 @@ impl.select("isotropic", ode_shape=(2,))
 
 
 def main():
-    f, u0, (t0, t1), f_args = ivps.lotka_volterra()
+    # Create a problem and an initial guess
+    # next: replicate https://proceedings.mlr.press/v216/ott23a/ott23a-supp.pdf
+    f, u0, (t0, t1), f_args = ivps.goodwin()
 
     @jax.jit
     def vf(y, *, t):  # noqa: ARG001
@@ -41,10 +43,10 @@ def main():
     theta_true = u0 + 0.5 * jnp.flip(u0)
     theta_guess = u0  # initial guess
 
+    # Visualise the initial guess and the data
+
     save_at = jnp.linspace(t0, t1, num=250, endpoint=True)
     solve_save_at = solver_adaptive(vf, t0, save_at=save_at)
-
-    # Visualise the initial guess and the data
 
     fig, ax = plt.subplots(figsize=(5, 3))
 
@@ -57,26 +59,29 @@ def main():
     ax.annotate("Initial guess", (7.5, 20.0), **guess_kwargs)
     sol = solve_save_at(theta_guess)
     ax = plot_solution(sol, ax=ax, **guess_kwargs)
-    # plt.show()
+    plt.show()
 
-    # Fixed steps for reverse-mode differentiability:
+    # Define the fixed-step solver
 
     ts = jnp.linspace(t0, t1, endpoint=True, num=100)
     solve_fixed = solver_fixed(vf, t0, grid=ts)
     data = solve_fixed(theta_true).u
 
+    # Define the loss function. For now, use
+    # fixed steps for reverse-mode differentiability:
+
     mean = theta_guess
     cov = jnp.eye(2) * 30  # fairly uninformed prior
     log_M = log_posterior_fun(data=data, solve_fixed=solve_fixed, mean=mean, cov=cov)
 
+    # Build a BlackJax sampler:
+
     initial_position = theta_guess
     rng_key = jax.random.PRNGKey(0)
 
-    # WARMUP
+    # Warmup
     warmup = blackjax.window_adaptation(blackjax.nuts, log_M, progress_bar=True)
-
     warmup_results, _ = warmup.run(rng_key, initial_position, num_steps=200)
-
     initial_state = warmup_results.state
     step_size = warmup_results.parameters["step_size"]
     inverse_mass_matrix = warmup_results.parameters["inverse_mass_matrix"]
@@ -86,7 +91,7 @@ def main():
         inverse_mass_matrix=inverse_mass_matrix,
     )
 
-    # INFERENCE LOOP
+    # Inference loop
     rng_key, _ = jax.random.split(rng_key, 2)
     states = inference_loop(
         rng_key, kernel=nuts_kernel, initial_state=initial_state, num_samples=150
