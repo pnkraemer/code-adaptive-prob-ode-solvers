@@ -1,6 +1,3 @@
-import os
-import time
-
 import diffrax
 import equinox as eqx  # https://github.com/patrick-kidger/equinox
 import jax
@@ -16,12 +13,12 @@ from probdiffeq.impl import impl
 
 
 def main(
-    dataset_size=64,
+    dataset_size=16,
     batch_size=1,
-    lr_strategy=(3e-3, 3e-3),
-    steps_strategy=(500, 100),
-    length_strategy=(0.1, 1),
-    width_size=64,
+    lr_strategy=(1e-1, 1e-1),
+    steps_strategy=(100, 100),
+    length_strategy=(1.0, 1),
+    width_size=4,
     depth=2,
     seed=5678,
     plot=True,
@@ -70,7 +67,7 @@ def main(
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
         model = eqx.apply_updates(model, updates)
-        return loss, model, opt_state
+        return loss, model, opt_state, grads
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
         optim = optax.adabelief(lr)
@@ -80,28 +77,32 @@ def main(
         for step, (yi,) in zip(
             range(steps), dataloader((_ys,), batch_size, key=loader_key)
         ):
-            start = time.time()
-            loss, model, opt_state = make_step(_ts, yi, model, opt_state)
-            end = time.time()
+            # start = time.time()
+            loss, model, opt_state, grads = make_step(_ts, yi, model, opt_state)
+            # model, opt_state = run_lbfgs(model, loss, max_iter=2)
+            # end = time.time()
+            print("std", model.std, "sigma", model.sigma)
+            print("std", grads.std, "sigma", grads.sigma)
+            print()
+            #
+            # if (step % print_every) == 0 or step == steps - 1:
+            #     print(
+            #         f"Step: {step}, Loss: {loss:.3e}, Time: {(end - start):.3e}, Sigma: {model.sigma:.3e}, Std: {model.std:.3e}"
+            #     )
 
-            if (step % print_every) == 0 or step == steps - 1:
-                print(
-                    f"Step: {step}, Loss: {loss:.3e}, Time: {(end - start):.3e}, Sigma: {model.sigma:.3e}, Std: {model.std:.3e}"
-                )
-
-    if plot:
-        plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
-        plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        if mode == "diffrax":
-            model_y = model(ts, ys[0, 0]).ys
-        elif mode == "probdiffeq":
-            model_y = model(ts, ys[0, 0]).u
-        plt.plot(ts, model_y[:, 0], ".", c="crimson", label="Model")
-        plt.plot(ts, model_y[:, 1], ".", c="crimson")
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
-        plt.show()
+        if plot:
+            plt.plot(ts, ys[0, :, 0], "x", c="dodgerblue", label="Real")
+            plt.plot(ts, ys[0, :, 1], "x", c="dodgerblue")
+            if mode == "diffrax":
+                model_y = model(ts, ys[0, 0]).ys
+            elif mode == "probdiffeq":
+                model_y = model(ts, ys[0, 0]).u
+            plt.plot(ts, model_y[:, 0], ".", c="crimson", label="Model")
+            plt.plot(ts, model_y[:, 1], ".", c="crimson")
+            plt.legend()
+            plt.tight_layout()
+            # plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
+            plt.show()
 
     return ts, ys, model
 
@@ -153,7 +154,7 @@ class NeuralODE(eqx.Module):
     mode: str
 
     # Trainable solver-parameters
-    # _sigma: jax.Array
+    _sigma: jax.Array
     _std: jax.Array
 
     def __init__(self, data_size, width_size, depth, *, key, mode, **kwargs):
@@ -161,20 +162,21 @@ class NeuralODE(eqx.Module):
         self.mode = mode
         self.func = Func(data_size, width_size, depth, key=key)
 
-        # self._sigma = 1.0 * jnp.ones((), dtype=float)
+        self._sigma = 1e20 * jnp.ones((), dtype=float)
         self._std = -5 * jnp.ones((), dtype=float)
 
     @property
     def sigma(self):
-        return 1.0
-        # return self._sigma
+        return 1e10
+        # return jax.lax.stop_gradient(self._sigma)
 
     @property
     def std(self):
-        return 10.0**self._std
+        return 1e-3
+        # return self._std
 
     def __call__(self, ts, y0):
-        atol, rtol = 1e-2, 1e-2
+        atol, rtol = 1e-3, 1e-3
         if self.mode == "diffrax":
             solution = diffrax.diffeqsolve(
                 diffrax.ODETerm(self.func),

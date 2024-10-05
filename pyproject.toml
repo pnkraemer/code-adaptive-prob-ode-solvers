@@ -18,6 +18,7 @@ dependencies = [
     "tueplots",     # plotting utilities
     "PyQt5",        # to resolve "FigureCanvas is not interactive"
     "optax",        # Optimisation
+    "blackjax",     # Sampling
 ]
 
 [tool.pytest.ini_options]
