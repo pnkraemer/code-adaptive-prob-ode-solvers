@@ -7,19 +7,21 @@ import equinox as eqx
 import jax.numpy as jnp
 from probdiffeq.impl import impl
 from probdiffeq import ivpsolvers, taylor, ivpsolve, stats
+import optax
 
 from probdiffeq.backend import control_flow as cfl
+import tqdm
 
 
 class VanDerPol(eqx.Module):
     _mu: jax.Array
 
     def __init__(self, mu):
-        self._mu = jnp.log10(mu)
+        self._mu = jnp.sqrt(mu)
 
     @property
     def mu(self):
-        return 10.0**self._mu
+        return self._mu**2
 
     def __call__(self, y, ydot, *, t):  # noqa: ARG001
         return self.mu * (ydot * (1 - y**2) - y)
@@ -31,24 +33,34 @@ def main():
 
     vdp = VanDerPol(mu=10**1)
     u0s = jnp.asarray([[2.0], [0.0]])
-    t0, t1 = 0.0, 6.3
+    t0, t1 = 0.0, 3.15
     save_at = jnp.linspace(t0, t1)
 
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=1000)
     with cfl.context_overwrite_while_loop(loop):
-        sol = solve(vdp, u0s, save_at=save_at)
-        loss = log_likelihood(save_at=save_at, u=sol.u)
+        truth = solve(vdp, u0s, save_at=save_at)
+        loss = log_likelihood(save_at=save_at, u=truth.u)
 
+        vdp = VanDerPol(mu=1.0)
         loss = jax.jit(jax.value_and_grad(loss))
-        print(loss(vdp, u0s))
-        for _ in range(10):
-            print(loss(vdp, u0s))
+
+        optimizer = optax.adabelief(1e-1)
+        opt_state = optimizer.init(vdp)
+        progressbar = tqdm.tqdm(range(100))
+        progressbar.set_description(f"loss: {1.0:.2e}, mu={vdp.mu:.3f}")
+        for _ in progressbar:
+            val, grads = loss(vdp, u0s)
+
+            updates, opt_state = optimizer.update(grads, opt_state)
+            vdp = optax.apply_updates(vdp, updates)
+            progressbar.set_description(f"loss: {val:.2e}, mu={vdp.mu:.3f}")
 
 
 def log_likelihood(save_at, u):
     def loss(ode, u0s):
         solution = solve(ode, u0s, save_at=save_at)
-        std = 1e-8 * jnp.ones_like(save_at)
+        eps = jnp.sqrt(jnp.sqrt(jnp.finfo(u).eps))
+        std = eps * jnp.ones_like(save_at)
         lml = stats.log_marginal_likelihood(
             u, standard_deviation=std, posterior=solution.posterior
         )
@@ -59,11 +71,11 @@ def log_likelihood(save_at, u):
 
 def solve(ode, u0s, save_at):
     # Set up the solver
-    num = 4
+    num = 3
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
     ts0 = ivpsolvers.correction_ts1(ode_order=2)
     strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
-    solver = ivpsolvers.solver(strategy)
+    solver = ivpsolvers.solver_dynamic(strategy)
 
     # Set up the initial condition
     t0 = save_at[0]
