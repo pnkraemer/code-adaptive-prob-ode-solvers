@@ -1,13 +1,15 @@
 """Estimate ODE paramaters with ProbDiffEq and BlackJAX."""
 
 import functools
-
+import equinox as eqx
+from odecheckpts import exp_util
 import blackjax
 import jax
 import jax.experimental.ode
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from diffeqzoo import backend, ivps
+from typing import Callable
 
 from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.impl import impl
@@ -32,41 +34,38 @@ def main():
     impl.select("isotropic", ode_shape=(2,))
 
     # Create a problem and an initial guess
+
     # next: replicate https://proceedings.mlr.press/v216/ott23a/ott23a-supp.pdf
-    f, u0, (t0, t1), f_args = ivps.goodwin()
+    model_true, (t0, t1) = model_ivp()
 
-    @jax.jit
-    def vf(y, *, t):  # noqa: ARG001
-        """Evaluate the Lotka-Volterra vector field."""
-        return f(y, *f_args)
-
-    theta_true = u0 + 0.5 * jnp.flip(u0)
-    theta_guess = u0  # initial guess
+    key = jax.random.PRNGKey(1)
+    key, subkey = jax.random.split(key, num=2)
+    model_guess = exp_util.tree_random_like(subkey, model_true)
 
     # Visualise the initial guess and the data
-
     save_at = jnp.linspace(t0, t1, num=250, endpoint=True)
-    solve_save_at = solver_adaptive(vf, t0, save_at=save_at)
+    solve_save_at = solver_adaptive(t0, save_at=save_at)
 
     fig, ax = plt.subplots(figsize=(5, 3))
 
     data_kwargs = {"alpha": 0.5, "color": "gray"}
     ax.annotate("Data", (13.0, 30.0), **data_kwargs)
-    sol = solve_save_at(theta_true)
+    sol = solve_save_at(model_true)
     ax = plot_solution(sol, ax=ax, **data_kwargs)
 
     guess_kwargs = {"color": "C3"}
     ax.annotate("Initial guess", (7.5, 20.0), **guess_kwargs)
-    sol = solve_save_at(theta_guess)
+    sol = solve_save_at(model_guess)
     ax = plot_solution(sol, ax=ax, **guess_kwargs)
     plt.show()
 
     # Define the fixed-step solver
 
     ts = jnp.linspace(t0, t1, endpoint=True, num=100)
-    solve_fixed = solver_fixed(vf, t0, grid=ts)
-    data = solve_fixed(theta_true).u
+    solve_fixed = solver_fixed(t0, grid=ts)
+    data = solve_fixed(model_true).u
 
+    assert False
     # Define the loss function. For now, use
     # fixed steps for reverse-mode differentiability:
 
@@ -156,6 +155,29 @@ def main():
     plt.show()
 
 
+class ODE(eqx.Module):
+    _u0: jax.Array
+    args: tuple = eqx.field(static=True)
+    vf: Callable = eqx.field(static=True)
+
+    def __init__(self, u0, args, vf):
+        self._u0 = u0
+        self.args = args
+        self.vf = vf
+
+    @property
+    def u0(self):
+        return jax.nn.softplus(self._u0)
+
+    def __call__(self, y, *, t):
+        return self.vf(y, *self.args)
+
+
+def model_ivp():
+    vf, u0, (t0, t1), params = ivps.lotka_volterra()
+    return ODE(vf=vf, u0=u0, args=params), (t0, t1)
+
+
 def plot_solution(sol, *, ax, marker=".", **plotting_kwargs):
     """Plot the IVP solution."""
     for d in [0, 1]:
@@ -165,8 +187,8 @@ def plot_solution(sol, *, ax, marker=".", **plotting_kwargs):
     return ax
 
 
-def solver_fixed(vf, t0, *, grid):
-    def solve_fixed(theta):
+def solver_fixed(t0, *, grid):
+    def solve_fixed(model):
         """Evaluate the parameter-to-solution map, solving on a fixed grid."""
         # Create a probabilistic solver
         ibm = ivpsolvers.prior_ibm(num_derivatives=2)
@@ -174,18 +196,20 @@ def solver_fixed(vf, t0, *, grid):
         strategy = ivpsolvers.strategy_filter(ibm, ts0)
         solver = ivpsolvers.solver(strategy)
 
-        tcoeffs = taylor.odejet_padded_scan(lambda y: vf(y, t=t0), (theta,), num=2)
+        tcoeffs = taylor.odejet_padded_scan(
+            lambda y: model(y, t=t0), (model.u0,), num=2
+        )
         output_scale = 10.0
         init = solver.initial_condition(tcoeffs, output_scale)
 
-        sol = ivpsolve.solve_fixed_grid(vf, init, grid=grid, solver=solver)
+        sol = ivpsolve.solve_fixed_grid(model, init, grid=grid, solver=solver)
         return sol[-1]
 
     return jax.jit(solve_fixed)
 
 
-def solver_adaptive(vf, t0, *, save_at):
-    def solve(theta):
+def solver_adaptive(t0, *, save_at):
+    def solve(model: ODE):
         """Evaluate the parameter-to-solution map, solving on an adaptive grid."""
         # Create a probabilistic solver
         ibm = ivpsolvers.prior_ibm(num_derivatives=2)
@@ -194,11 +218,13 @@ def solver_adaptive(vf, t0, *, save_at):
         solver = ivpsolvers.solver(strategy)
         adaptive_solver = ivpsolve.adaptive(solver)
 
-        tcoeffs = taylor.odejet_padded_scan(lambda y: vf(y, t=t0), (theta,), num=2)
+        tcoeffs = taylor.odejet_padded_scan(
+            lambda y: model(y, t=t0), (model.u0,), num=2
+        )
         output_scale = 10.0
         init = solver.initial_condition(tcoeffs, output_scale)
         return ivpsolve.solve_adaptive_save_at(
-            vf, init, save_at=save_at, adaptive_solver=adaptive_solver, dt0=0.1
+            model, init, save_at=save_at, adaptive_solver=adaptive_solver, dt0=0.1
         )
 
     return jax.jit(solve)
