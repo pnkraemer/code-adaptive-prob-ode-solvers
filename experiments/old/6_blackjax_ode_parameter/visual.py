@@ -1,7 +1,7 @@
 """Estimate ODE paramaters with ProbDiffEq and BlackJAX."""
 
 import functools
-from typing import Callable
+from typing import Callable, Any
 
 import blackjax
 import equinox as eqx
@@ -18,62 +18,39 @@ from odecheckpts import exp_util
 
 
 def main(num_samples=150, num_steps_warmup=200):
-    # x64 precision
+    # x64 precision & CPU
     jax.config.update("jax_enable_x64", True)
-
-    # CPU
     jax.config.update("jax_platform_name", "cpu")
-
-    # IVP examples in JAX
-    if not backend.has_been_selected:
-        backend.select("jax")
 
     # Nice-looking plots
     plt.rcParams.update(notebook.plot_style())
     plt.rcParams.update(notebook.plot_sizes())
 
-    impl.select("isotropic", ode_shape=(2,))
-
     # Create a problem and an initial guess
-
-    # next: replicate https://proceedings.mlr.press/v216/ott23a/ott23a-supp.pdf
-    model_true, (t0, t1) = model_ivp()
-
-    key = jax.random.PRNGKey(1)
+    key = jax.random.PRNGKey(2)
     key, subkey = jax.random.split(key, num=2)
+    model_true, (t0, t1) = model_ivp()
     model = exp_util.tree_random_like(subkey, model_true)
 
     # Visualise the initial guess and the data
-    save_at = jnp.linspace(t0, t1, num=250, endpoint=True)
-    solve_save_at = solver_adaptive(t0, save_at=save_at)
+    grid_plot = jnp.linspace(t0, t1, num=250, endpoint=True)
+    grid_data = jnp.linspace(t0, t1, num=100, endpoint=True)
+    solver = Solver(grid_plot=grid_plot, grid_data=grid_data, ode_shape=(2,))
 
-    fig, ax = plt.subplots(figsize=(5, 3))
+    # Make a figure
+    kwargs = {"Data": {"alpha": 0.5, "color": "gray"}, "Initial guess": {"color": "C3"}}
+    figure = Figure(figsize=(5, 3), kwargs=kwargs)
 
-    data_kwargs = {"alpha": 0.5, "color": "gray", "label": "Data"}
-    sol = solve_save_at(model_true)
-    ax = plot_solution(sol, ax=ax, **data_kwargs)
+    data = solver.solve_data(model_true)
+    figure.plot_solution(data, label="Data")
 
-    guess_kwargs = {"color": "C3", "label": "Initial guess"}
-    # ax.annotate("Initial guess", (7.5, 20.0), **guess_kwargs)
-    sol = solve_save_at(model)
-    ax = plot_solution(sol, ax=ax, **guess_kwargs)
+    guess = solver.solve_data(model)
+    figure.plot_solution(guess, label="Initial guess")
 
-    handles, labels = plt.gca().get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys())
-    plt.show()
+    figure.legend()
+    figure.show()
 
-    # Define the fixed-step solver
-
-    ts = jnp.linspace(t0, t1, endpoint=True, num=100)
-    solve_fixed = solver_fixed(t0, grid=ts)
-    data = solve_fixed(model_true).u
-
-    # Define the loss function. For now, use
-    # fixed steps for reverse-mode differentiability:
-
-    # mean, cov = model.prior()
-    log_M = log_posterior_fun(data=data, solve_fixed=solve_fixed)
+    log_M = log_posterior_fun(data=data, solver=solver)
 
     # Build a BlackJax sampler:
     key, subkey = jax.random.split(key, num=2)
@@ -96,23 +73,24 @@ def main(num_samples=150, num_steps_warmup=200):
         subkey, kernel=nuts_kernel, initial_state=initial_state, num_samples=num_samples
     )
 
-    solution_samples = jax.vmap(solve_save_at)(states.position)
-
+    print(states)
+    assert False
+    solution_samples = jax.vmap(solver.solve_data)(states.position)
     # Visualise the initial guess and the data
-
-    fig, ax = plt.subplots()
 
     sample_kwargs = {"color": "C0", "label": "Samples"}
     for sol in solution_samples:
-        ax = plot_solution(sol, ax=ax, linewidth=0.1, alpha=0.75, **sample_kwargs)
+        figure.plot_solution(sol, linewidth=0.1, alpha=0.75, **sample_kwargs)
 
     data_kwargs = {"color": "gray", "label": "Data"}
     sol = solve_save_at(model_true)
-    ax = plot_solution(sol, ax=ax, linewidth=4, alpha=0.5, **data_kwargs)
+    ax = figure.plot_solution(sol, ax=ax, linewidth=4, alpha=0.5, **data_kwargs)
 
     guess_kwargs = {"color": "gray", "label": "Initial guess"}
     sol = solve_save_at(model)
-    ax = plot_solution(sol, ax=ax, linestyle="dashed", alpha=0.75, **guess_kwargs)
+    ax = figure.plot_solution(
+        sol, ax=ax, linestyle="dashed", alpha=0.75, **guess_kwargs
+    )
 
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
@@ -133,6 +111,74 @@ def main(num_samples=150, num_steps_warmup=200):
     plt.plot(model.u0[0], model.u0[1], "P", label="Initial guess", markersize=8)
     plt.legend()
     plt.show()
+
+
+class Figure(eqx.Module):
+    fig: Any
+    ax: Any
+    kwargs: dict
+
+    def __init__(self, figsize, kwargs: dict):
+        self.fig, self.ax = plt.subplots(figsize=figsize)
+        self.kwargs = kwargs
+
+    def plot_solution(self, sol, *, label, marker="."):
+        kwargs = self.kwargs[label]
+        for d in [0, 1]:
+            self.ax.plot(sol.t, sol.u[:, d], marker="None", label=label, **kwargs)
+            self.ax.plot(sol.t[0], sol.u[0, d], marker=marker, **kwargs)
+            self.ax.plot(sol.t[-1], sol.u[-1, d], marker=marker, **kwargs)
+
+    def legend(self):
+        handles, labels = plt.gca().get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        plt.legend(by_label.values(), by_label.keys())
+
+    def show(self):
+        plt.show()
+
+
+class Solver(eqx.Module):
+    grid_plot: jax.Array
+    grid_data: jax.Array
+
+    def __init__(self, grid_plot, grid_data, ode_shape):
+        # Set up the solver
+        impl.select("isotropic", ode_shape=ode_shape)
+
+        self.grid_plot = grid_plot
+        self.grid_data = grid_data
+
+    @property
+    def solver(self):
+        # Create a probabilistic solver
+        ibm = ivpsolvers.prior_ibm(num_derivatives=2)
+        ts0 = ivpsolvers.correction_ts0()
+        strategy = ivpsolvers.strategy_filter(ibm, ts0)
+        return ivpsolvers.solver(strategy)
+
+    def solve_data(self, model):
+        adaptive_solver = ivpsolve.adaptive(self.solver)
+        tcoeffs = model.tcoeffs(num=2, t0=self.grid_data[0])
+        output_scale = 10.0
+        init = self.solver.initial_condition(tcoeffs, output_scale)
+        return ivpsolve.solve_adaptive_save_at(
+            model,
+            init,
+            save_at=self.grid_data,
+            adaptive_solver=adaptive_solver,
+            dt0=0.1,
+        )
+
+    def solve_fixed(self, model):
+        tcoeffs = model.tcoeffs(t0=self.grid_data[0], num=2)
+        output_scale = 10.0
+        init = self.solver.initial_condition(tcoeffs, output_scale)
+        sol = ivpsolve.solve_fixed_grid(
+            model, init, grid=self.grid_data, solver=self.solver
+        )
+
+        return sol[-1]
 
 
 class ODE(eqx.Module):
@@ -156,6 +202,10 @@ class ODE(eqx.Module):
     def args(self):
         return self._unravel(self._args)
 
+    def tcoeffs(self, num, t0):
+        tfun = functools.partial(taylor.odejet_padded_scan, num=num)
+        return tfun(lambda y: self(y, t=t0), (self.u0,))
+
     @jax.jit
     def __call__(self, y, *, t):
         return self.vf(y, *self.args)
@@ -169,70 +219,23 @@ class ODE(eqx.Module):
 
 
 def model_ivp():
+    # IVP examples in JAX
+    if not backend.has_been_selected:
+        backend.select("jax")
+
     vf, u0, (t0, t1), params = ivps.lotka_volterra()
     return ODE(vf=vf, u0=u0, args=params), (t0, t1)
 
 
-def plot_solution(sol, *, ax, label, marker=".", **plotting_kwargs):
-    """Plot the IVP solution."""
-    for d in [0, 1]:
-        ax.plot(sol.t, sol.u[:, d], marker="None", label=label, **plotting_kwargs)
-        ax.plot(sol.t[0], sol.u[0, d], marker=marker, **plotting_kwargs)
-        ax.plot(sol.t[-1], sol.u[-1, d], marker=marker, **plotting_kwargs)
-    return ax
-
-
-def solver_fixed(t0, *, grid):
-    def solve_fixed(model):
-        """Evaluate the parameter-to-solution map, solving on a fixed grid."""
-        # Create a probabilistic solver
-        ibm = ivpsolvers.prior_ibm(num_derivatives=2)
-        ts0 = ivpsolvers.correction_ts0()
-        strategy = ivpsolvers.strategy_filter(ibm, ts0)
-        solver = ivpsolvers.solver(strategy)
-
-        tcoeffs = taylor.odejet_padded_scan(
-            lambda y: model(y, t=t0), (model.u0,), num=2
-        )
-        output_scale = 10.0
-        init = solver.initial_condition(tcoeffs, output_scale)
-
-        sol = ivpsolve.solve_fixed_grid(model, init, grid=grid, solver=solver)
-        return sol[-1]
-
-    return jax.jit(solve_fixed)
-
-
-def solver_adaptive(t0, *, save_at):
-    def solve(model: ODE):
-        """Evaluate the parameter-to-solution map, solving on an adaptive grid."""
-        # Create a probabilistic solver
-        ibm = ivpsolvers.prior_ibm(num_derivatives=2)
-        ts0 = ivpsolvers.correction_ts0()
-        strategy = ivpsolvers.strategy_filter(ibm, ts0)
-        solver = ivpsolvers.solver(strategy)
-        adaptive_solver = ivpsolve.adaptive(solver)
-
-        tcoeffs = taylor.odejet_padded_scan(
-            lambda y: model(y, t=t0), (model.u0,), num=2
-        )
-        output_scale = 10.0
-        init = solver.initial_condition(tcoeffs, output_scale)
-        return ivpsolve.solve_adaptive_save_at(
-            model, init, save_at=save_at, adaptive_solver=adaptive_solver, dt0=0.1
-        )
-
-    return jax.jit(solve)
-
-
-def log_posterior_fun(data, solve_fixed, obs_stdev=0.1):
+def log_posterior_fun(data, solver, obs_stdev=0.1):
     @jax.jit
     def logpost(model):
         """Evaluate the logposterior-function of the data."""
-
-        y_T = solve_fixed(model)
+        y_T = solver.solve_fixed(model)
         lml = stats.log_marginal_likelihood_terminal_values
-        logpdf_data = lml(data, standard_deviation=obs_stdev, posterior=y_T.posterior)
+        logpdf_data = lml(
+            data.u[-1], standard_deviation=obs_stdev, posterior=y_T.posterior
+        )
 
         logpdf_prior = model.logpdf_prior()
         return logpdf_data + logpdf_prior

@@ -169,7 +169,5 @@ def style_simple():
 
 def tree_random_like(key, tree):
     flat, unflatten = jax.flatten_util.ravel_pytree(tree)
-    key, subkey = jax.random.split(key, num=2)
-    flat *= jax.random.normal(key, shape=flat.shape, dtype=flat.dtype)
-    flat += jax.random.normal(subkey, shape=flat.shape, dtype=flat.dtype)
+    flat = jax.random.normal(key, shape=flat.shape, dtype=flat.dtype)
     return unflatten(flat)
