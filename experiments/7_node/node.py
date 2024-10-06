@@ -41,12 +41,19 @@ def main():
         truth = solve(vdp, u0s, save_at=save_at)
         loss = log_likelihood(save_at=save_at, u=truth.u)
 
+        # next: make things scale to stiff equations.
+        # idea 1): more data
+        # idea 2): different parametrisation of VdP.
+        #  E.g. Lienhard transform: https://en.wikipedia.org/wiki/Van_der_Pol_oscillator
+        # idea 3): Add forcing term to have 2 parameters which makes learning more interesting
+        # idea 4): ???
+
         vdp = VanDerPol(mu=1.0)
         loss = jax.jit(jax.value_and_grad(loss))
 
         optimizer = optax.adabelief(1e-1)
         opt_state = optimizer.init(vdp)
-        progressbar = tqdm.tqdm(range(100))
+        progressbar = tqdm.tqdm(range(1000))
         progressbar.set_description(f"loss: {1.0:.2e}, mu={vdp.mu:.3f}")
         for _ in progressbar:
             val, grads = loss(vdp, u0s)
