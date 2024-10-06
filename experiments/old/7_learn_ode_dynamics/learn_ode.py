@@ -6,7 +6,6 @@ import jax.numpy as jnp
 import jax.random as jr
 import matplotlib.pyplot as plt
 import optax  # https://github.com/deepmind/optax
-
 from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.backend import control_flow
 from probdiffeq.impl import impl

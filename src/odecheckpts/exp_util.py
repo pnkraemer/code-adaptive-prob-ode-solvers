@@ -1,5 +1,6 @@
 import dataclasses
 from typing import Callable
+
 import jax
 from tueplots import axes
 
@@ -168,5 +169,7 @@ def style_simple():
 
 def tree_random_like(key, tree):
     flat, unflatten = jax.flatten_util.ravel_pytree(tree)
-    tree_like = jax.random.normal(key, shape=flat.shape, dtype=flat.dtype)
-    return unflatten(tree_like)
+    key, subkey = jax.random.split(key, num=2)
+    flat *= jax.random.normal(key, shape=flat.shape, dtype=flat.dtype)
+    flat += jax.random.normal(subkey, shape=flat.shape, dtype=flat.dtype)
+    return unflatten(flat)
