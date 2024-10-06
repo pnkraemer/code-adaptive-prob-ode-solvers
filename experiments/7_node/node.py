@@ -21,14 +21,13 @@ import tqdm
 from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.backend import control_flow as cfl
 from probdiffeq.impl import impl
-import matplotlib.pyplot as plt
 
 
 class FitzHughNagumo(eqx.Module):
     _params: jax.Array
 
-    def __init__(self, mu):
-        self._param = params
+    def __init__(self, params):
+        self._params = params
 
     @property
     def params(self):
@@ -43,7 +42,7 @@ class FitzHughNagumo(eqx.Module):
 
 def main():
     jax.config.update("jax_enable_x64", True)
-    impl.select("dense", ode_shape=(1,))
+    impl.select("dense", ode_shape=(2,))
 
     # Set up the problem
     params_true = jnp.asarray([0.2, 0.2, 3.0])
@@ -52,43 +51,32 @@ def main():
     t0, t1 = 0.0, 20.0
     save_at = jnp.linspace(t0, t1, num=50)
     truth = solve(fhn, u0s, save_at=save_at)
+
     loss = log_likelihood(save_at=save_at, u=truth.u)
-    assert False
+
     # Use Equinox's bounded while loop for differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=1_000)
     with cfl.context_overwrite_while_loop(loop):
-        # Plot the loss landscape to verify the setup
-        # Both zoomed and not-zoomed
-        mu_init = 10**1.5
-        mus_zoomed_in = jnp.linspace(mu_init * 0.999, mu_init * 1.001, num=100)
-        mus_zoomed_out = jnp.linspace(mu_init / 4, mu_true * 2, num=100)
-        for mus in [mus_zoomed_in, mus_zoomed_out]:
-            vdps = jax.vmap(VanDerPol)(mus)
-            losses = jax.jit(jax.vmap(loss, in_axes=(0, None)))(vdps, u0s)
-            plt.plot(vdps._mu, losses, ".")
-            plt.axvline(mu_init)
-            # plt.axvline(mu_true)
-            plt.show()
-
         # Set up the optimizer
         loss = jax.jit(jax.value_and_grad(loss))
-        optimizer = optax.adam(1e-3)
+        optimizer = optax.adam(1e-1)
 
         # Initialise the optimizer
-        vdp = VanDerPol(mu=mu_init)
-        opt_state = optimizer.init(vdp)
-        val, grads = loss(vdp, u0s)
+        r0 = jax.random.uniform(jax.random.PRNGKey(0), shape=(3,))
+        fhn = FitzHughNagumo(r0)
+        opt_state = optimizer.init(fhn)
+        val, grads = loss(fhn, u0s)
 
         # Run the training loop
         progressbar = tqdm.tqdm(range(1000))
-        label = f"loss: {val:.2e}, mu={vdp.mu:.3f}, grad={grads.mu}"
+        label = f"loss: {val:.2e}, p={fhn.params}"
         progressbar.set_description(label)
         for _ in progressbar:
-            val, grads = loss(vdp, u0s)
+            val, grads = loss(fhn, u0s)
             updates, opt_state = optimizer.update(grads, opt_state)
-            vdp = optax.apply_updates(vdp, updates)
-
-            label = f"loss: {val:.2e}, mu={vdp.mu:.3f}, grad={grads.mu}"
+            fhn = optax.apply_updates(fhn, updates)
+            print(grads)
+            label = f"loss: {val:.2e}, p={fhn.params}"
             progressbar.set_description(label)
 
 
@@ -107,20 +95,19 @@ def log_likelihood(save_at, u):
 
 def solve(ode, u0s, save_at):
     # any high-accuracy solution works. why? loss-landscape (zoom in!)
-    num = 5
-    tol = 1e-10
+    num = 3
+    tol = 1e-5
 
     # Set up the solver
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
-    ts0 = ivpsolvers.correction_ts1(ode_order=2)
+    ts0 = ivpsolvers.correction_ts1(ode_order=1)
     strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
     solver = ivpsolvers.solver(strategy)  # why? plot loss-landscape
 
     # Set up the initial condition
     t0 = save_at[0]
     vf = functools.partial(ode, t=t0)
-    init = [u0s[0], u0s[1]]
-    tcoeffs = taylor.odejet_padded_scan(vf, init, num=num - 1)
+    tcoeffs = taylor.odejet_padded_scan(vf, [u0s], num=num)
     output_scale = 1e10  # or any other value with the same shape
     init = solver.initial_condition(tcoeffs, output_scale)
 
