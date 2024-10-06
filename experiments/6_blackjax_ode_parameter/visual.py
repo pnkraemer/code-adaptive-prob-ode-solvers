@@ -13,24 +13,24 @@ from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.impl import impl
 from probdiffeq.util.doc_util import notebook
 
-# x64 precision
-jax.config.update("jax_enable_x64", True)
-
-# CPU
-jax.config.update("jax_platform_name", "cpu")
-
-# IVP examples in JAX
-if not backend.has_been_selected:
-    backend.select("jax")
-
-# Nice-looking plots
-plt.rcParams.update(notebook.plot_style())
-plt.rcParams.update(notebook.plot_sizes())
-
-impl.select("isotropic", ode_shape=(2,))
-
 
 def main():
+    # x64 precision
+    jax.config.update("jax_enable_x64", True)
+
+    # CPU
+    jax.config.update("jax_platform_name", "cpu")
+
+    # IVP examples in JAX
+    if not backend.has_been_selected:
+        backend.select("jax")
+
+    # Nice-looking plots
+    plt.rcParams.update(notebook.plot_style())
+    plt.rcParams.update(notebook.plot_sizes())
+
+    impl.select("isotropic", ode_shape=(2,))
+
     # Create a problem and an initial guess
     # next: replicate https://proceedings.mlr.press/v216/ott23a/ott23a-supp.pdf
     f, u0, (t0, t1), f_args = ivps.goodwin()
