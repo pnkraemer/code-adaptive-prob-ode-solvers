@@ -1,7 +1,7 @@
 """Estimate ODE paramaters with ProbDiffEq and BlackJAX."""
 
 import functools
-from typing import Callable, Any
+from typing import Any, Callable
 
 import blackjax
 import equinox as eqx
