@@ -24,18 +24,21 @@ from probdiffeq.impl import impl
 import matplotlib.pyplot as plt
 
 
-class VanDerPol(eqx.Module):
-    _mu: jax.Array
+class FitzHughNagumo(eqx.Module):
+    _params: jax.Array
 
     def __init__(self, mu):
-        self._mu = mu
+        self._param = params
 
     @property
-    def mu(self):
-        return self._mu
+    def params(self):
+        return self._params
 
-    def __call__(self, y, ydot, *, t):  # noqa: ARG001
-        return self.mu * (ydot * (1 - y**2) - y)
+    def __call__(self, u, *, t):
+        a, b, c = self.params
+        return jnp.asarray(
+            [c * (u[0] - u[0] ** 3 / 3 + u[1]), -(1.0 / c) * (u[0] - a - b * u[1])]
+        )
 
 
 def main():
@@ -43,14 +46,14 @@ def main():
     impl.select("dense", ode_shape=(1,))
 
     # Set up the problem
-    mu_true = 10**3
-    vdp = VanDerPol(mu=mu_true)
-    u0s = jnp.asarray([[2.0], [0.0]])
-    t0, t1 = 0.0, 3.15  # half a time-domain; if not, the loss gets flat
+    params_true = jnp.asarray([0.2, 0.2, 3.0])
+    fhn = FitzHughNagumo(params_true)
+    u0s = jnp.asarray([-1.0, 1.0])
+    t0, t1 = 0.0, 20.0
     save_at = jnp.linspace(t0, t1, num=50)
-    truth = solve(vdp, u0s, save_at=save_at)
+    truth = solve(fhn, u0s, save_at=save_at)
     loss = log_likelihood(save_at=save_at, u=truth.u)
-
+    assert False
     # Use Equinox's bounded while loop for differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=1_000)
     with cfl.context_overwrite_while_loop(loop):
