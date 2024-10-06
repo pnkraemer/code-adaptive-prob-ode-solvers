@@ -49,15 +49,18 @@ def main(num_samples=150, num_steps_warmup=200):
 
     fig, ax = plt.subplots(figsize=(5, 3))
 
-    data_kwargs = {"alpha": 0.5, "color": "gray"}
-    ax.annotate("Data", (13.0, 30.0), **data_kwargs)
+    data_kwargs = {"alpha": 0.5, "color": "gray", "label": "Data"}
     sol = solve_save_at(model_true)
     ax = plot_solution(sol, ax=ax, **data_kwargs)
 
-    guess_kwargs = {"color": "C3"}
-    ax.annotate("Initial guess", (7.5, 20.0), **guess_kwargs)
+    guess_kwargs = {"color": "C3", "label": "Initial guess"}
+    # ax.annotate("Initial guess", (7.5, 20.0), **guess_kwargs)
     sol = solve_save_at(model)
     ax = plot_solution(sol, ax=ax, **guess_kwargs)
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
     plt.show()
 
     # Define the fixed-step solver
@@ -99,68 +102,48 @@ def main(num_samples=150, num_steps_warmup=200):
 
     fig, ax = plt.subplots()
 
-    sample_kwargs = {"color": "C0"}
-    ax.annotate("Samples", (2.75, 31.0), **sample_kwargs)
+    sample_kwargs = {"color": "C0", "label": "Samples"}
     for sol in solution_samples:
         ax = plot_solution(sol, ax=ax, linewidth=0.1, alpha=0.75, **sample_kwargs)
 
-    data_kwargs = {"color": "gray"}
-    ax.annotate("Data", (18.25, 40.0), **data_kwargs)
+    data_kwargs = {"color": "gray", "label": "Data"}
     sol = solve_save_at(model_true)
     ax = plot_solution(sol, ax=ax, linewidth=4, alpha=0.5, **data_kwargs)
 
-    guess_kwargs = {"color": "gray"}
-    ax.annotate("Initial guess", (6.0, 12.0), **guess_kwargs)
+    guess_kwargs = {"color": "gray", "label": "Initial guess"}
     sol = solve_save_at(model)
     ax = plot_solution(sol, ax=ax, linestyle="dashed", alpha=0.75, **guess_kwargs)
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
+
     plt.show()
 
     plt.title("Posterior samples (parameter space)")
     plt.plot(
-        states.position.u0[:, 0], states.position.u0[:, 1], "o", alpha=0.5, markersize=4
+        states.position.u0[:, 0],
+        states.position.u0[:, 1],
+        "o",
+        alpha=0.5,
+        markersize=4,
+        label="Samples",
     )
     plt.plot(model_true.u0[0], model_true.u0[1], "P", label="Truth", markersize=8)
     plt.plot(model.u0[0], model.u0[1], "P", label="Initial guess", markersize=8)
     plt.legend()
     plt.show()
-    #
-    # xlim = 17, jnp.amax(states.position.u0[:, 0]) + 0.5
-    # ylim = 17, jnp.amax(states.position.u0[:, 1]) + 0.5
-    #
-    # xs = jnp.linspace(*xlim, endpoint=True, num=300)
-    # ys = jnp.linspace(*ylim, endpoint=True, num=300)
-    # Xs, Ys = jnp.meshgrid(xs, ys)
-    #
-    # Thetas = jnp.stack((Xs, Ys))
-    # log_M_vmapped_x = jax.vmap(log_M, in_axes=-1, out_axes=-1)
-    # log_M_vmapped = jax.vmap(log_M_vmapped_x, in_axes=-1, out_axes=-1)
-    # Zs = log_M_vmapped(Thetas)
-    #
-    # fig, ax = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(8, 3))
-    #
-    # ax_samples, ax_heatmap = ax
-    #
-    # fig.suptitle("Posterior samples (parameter space)")
-    # ax_samples.plot(
-    #     states.position.u0[:, 0], states.position.u0[:, 1], ".", alpha=0.5, markersize=4
-    # )
-    # ax_samples.plot(
-    #     model_true.u0[0], model_true.u0[1], "P", label="Truth", markersize=8
-    # )
-    # ax_samples.plot(model.u0[0], model.u0[1], "P", label="Initial guess", markersize=8)
-    # ax_samples.legend()
-    # im = ax_heatmap.contourf(Xs, Ys, jnp.exp(Zs), cmap="cividis", alpha=0.8)
-    # plt.colorbar(im)
-    # plt.show()
 
 
 class ODE(eqx.Module):
+    """Parametrised ODE."""
+
+    vf: Callable = eqx.field(static=True)
     _u0: jax.Array
     _args: jax.Array = eqx.field(static=True)
     _unravel: Callable = eqx.field(static=True)
-    vf: Callable = eqx.field(static=True)
 
-    def __init__(self, u0, args, vf):
+    def __init__(self, *, u0, args, vf):
         self._u0 = jnp.sqrt(u0)
         self._args, self._unravel = jax.flatten_util.ravel_pytree(args)
         self.vf = vf
@@ -168,7 +151,6 @@ class ODE(eqx.Module):
     @property
     def u0(self):
         return self._u0**2
-        # return jax.nn.softplus(self._u0)
 
     @property
     def args(self):
@@ -178,10 +160,12 @@ class ODE(eqx.Module):
     def __call__(self, y, *, t):
         return self.vf(y, *self.args)
 
-    def prior(self):
-        mean = self.u0
+    def logpdf_prior(self):
+        mean = jnp.zeros_like(self.u0)
         cov = jnp.eye(len(self.u0)) * 30  # fairly uninformed prior
-        return mean, cov
+
+        pdf = jax.scipy.stats.multivariate_normal.logpdf
+        return pdf(self.u0, mean=mean, cov=cov)
 
 
 def model_ivp():
@@ -189,10 +173,10 @@ def model_ivp():
     return ODE(vf=vf, u0=u0, args=params), (t0, t1)
 
 
-def plot_solution(sol, *, ax, marker=".", **plotting_kwargs):
+def plot_solution(sol, *, ax, label, marker=".", **plotting_kwargs):
     """Plot the IVP solution."""
     for d in [0, 1]:
-        ax.plot(sol.t, sol.u[:, d], marker="None", **plotting_kwargs)
+        ax.plot(sol.t, sol.u[:, d], marker="None", label=label, **plotting_kwargs)
         ax.plot(sol.t[0], sol.u[0, d], marker=marker, **plotting_kwargs)
         ax.plot(sol.t[-1], sol.u[-1, d], marker=marker, **plotting_kwargs)
     return ax
@@ -250,9 +234,7 @@ def log_posterior_fun(data, solve_fixed, obs_stdev=0.1):
         lml = stats.log_marginal_likelihood_terminal_values
         logpdf_data = lml(data, standard_deviation=obs_stdev, posterior=y_T.posterior)
 
-        mean, cov = model.prior()
-        pdf = jax.scipy.stats.multivariate_normal.logpdf
-        logpdf_prior = pdf(model.u0, mean=mean, cov=cov)
+        logpdf_prior = model.logpdf_prior()
         return logpdf_data + logpdf_prior
 
     return logpost
