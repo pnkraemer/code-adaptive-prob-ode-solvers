@@ -76,9 +76,9 @@ def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
     print(f"Truth: {mu:.3f}")
 
     # Set up the optimizer
-    loss = log_likelihood(save_at=save_at, std=std)
-    print(f"True loss: {loss(vdp, data_in, data_out):.2e}")
-    loss = eqx.filter_jit(eqx.filter_value_and_grad(loss))
+    pn_loss = pn_loss_function(save_at=save_at, std=std)
+    print(f"True pn_loss: {pn_loss(vdp, data_in, data_out):.2e}")
+    pn_loss = eqx.filter_jit(eqx.filter_value_and_grad(pn_loss))
     optimizer = optax.adam(lr)
 
     # Use Equinox's bounded while loop for reverse-differentiability
@@ -86,28 +86,28 @@ def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
     with cfl.context_overwrite_while_loop(loop):
         # Initialise the optimizer
         key, subkey = jax.random.split(key, num=2)
-        model_before = NeuralODE(subkey)
-        model = model_before
-        opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
+        pn_model_before = NeuralODE(subkey)
+        pn_model = pn_model_before
+        pn_opt_state = optimizer.init(eqx.filter(pn_model, eqx.is_inexact_array))
 
         # Run the training loop
         try:
             key, subkey = jax.random.split(key, num=2)
             data = dataloader(data_in, data_out, key=subkey, num_batches=num_batches)
             for idx, (inputs, outputs) in zip(range(num_epochs), data):
-                val, grads = loss(model, inputs, outputs)
-                updates, opt_state = optimizer.update(grads, opt_state)
-                model = eqx.apply_updates(model, updates)
+                val, grads = pn_loss(pn_model, inputs, outputs)
+                updates, pn_opt_state = optimizer.update(grads, pn_opt_state)
+                pn_model = eqx.apply_updates(pn_model, updates)
 
-                label = f"{idx}/{num_epochs} | loss: {val:.2e}"
+                label = f"{idx}/{num_epochs} | pn_loss: {val:.2e}"
                 print(label)
         except KeyboardInterrupt:
             pass
 
     # Plot before and after (at a finer resolution)
     save_at_plot = jnp.linspace(save_at[0], save_at[-1], num=100)
-    before = solve(model_before, data_in[0], save_at=save_at_plot)
-    after = solve(model, data_in[0], save_at=save_at_plot)
+    before = pn_solve(pn_model_before, data_in[0], save_at=save_at_plot)
+    after = pn_solve(pn_model, data_in[0], save_at=save_at_plot)
     plt.plot(save_at_plot, before.u, color="C0", label="Before")
     plt.plot(save_at_plot, after.u, color="C1", label="After")
     plt.plot(save_at, data_out[0], "x", color="C2", label="Data")
@@ -118,7 +118,7 @@ def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
 def generate_data(model_true, *, save_at, key, std):
     def generate(u0):
         noise = jax.random.normal(key, shape=(len(save_at), 2))
-        return solve(model_true, u0, save_at=save_at).u + std * noise
+        return pn_solve(model_true, u0, save_at=save_at).u + std * noise
 
     return generate
 
@@ -134,14 +134,14 @@ def dataloader(inputs, outputs, /, *, key, num_batches):
             yield inputs[i], outputs[i]
 
 
-def log_likelihood(*, save_at, std):
-    def loss(ode, data_in, data_out):
-        losses = loss_single(ode, data_in, data_out)
-        return jnp.mean(losses)
+def pn_loss_function(*, save_at, std):
+    def pn_loss(ode, data_in, data_out):
+        pn_losses = pn_loss_single(ode, data_in, data_out)
+        return jnp.mean(pn_losses)
 
     @functools.partial(jax.vmap, in_axes=(None, 0, 0))
-    def loss_single(ode, u0, truth):
-        solution = solve(ode, u0, save_at=save_at)
+    def pn_loss_single(ode, u0, truth):
+        solution = pn_solve(ode, u0, save_at=save_at)
         std_vec = std * jnp.ones_like(save_at)
 
         lml = stats.log_marginal_likelihood
@@ -149,12 +149,12 @@ def log_likelihood(*, save_at, std):
         lml = functools.partial(lml, standard_deviation=std_vec)
         return -lml(truth)
 
-    return loss
+    return pn_loss
 
 
-def solve(ode, data_in, save_at):
+def pn_solve(ode, data_in, save_at):
     # Any relatively-high-accuracy solution works.
-    # Why? Plot the loss-landscape
+    # Why? Plot the pn_loss-landscape
     num = 3
     tol = 1e-4
 
@@ -162,18 +162,18 @@ def solve(ode, data_in, save_at):
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
     ts0 = ivpsolvers.correction_ts0(ode_order=1)
     strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
-    solver = ivpsolvers.solver(strategy)
+    pn_solver = ivpsolvers.solver(strategy)
 
     # Set up the initial condition
     t0 = save_at[0]
     vf = functools.partial(ode, t=t0)
     tcoeffs = taylor.odejet_padded_scan(vf, [data_in], num=num)
     output_scale = jnp.ones((2,))
-    init = solver.initial_condition(tcoeffs, output_scale)
+    init = pn_solver.initial_condition(tcoeffs, output_scale)
 
-    # Build the solver and solve
+    # Build the pn_solver and solve
     ctrl = ivpsolve.control_proportional_integral()
-    adaptive_solver = ivpsolve.adaptive(solver, atol=tol, rtol=tol, control=ctrl)
+    adaptive_solver = ivpsolve.adaptive(pn_solver, atol=tol, rtol=tol, control=ctrl)
     solve_fun = functools.partial(ivpsolve.solve_adaptive_save_at, save_at=save_at)
     solve_fun = functools.partial(solve_fun, dt0=0.1)
     solve_fun = functools.partial(solve_fun, adaptive_solver=adaptive_solver)
