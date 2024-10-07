@@ -110,23 +110,26 @@ def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
                 if rk_val < rk_best[1]:
                     rk_best = (rk_model, rk_val)
 
-                label = f"{idx}/{num_epochs} | pn_loss: {pn_val:.2e} | rk_loss: {rk_val:.2e}"
-                print(label)
+                if idx % 5 == 0:
+                    label = f"{idx}/{num_epochs} | pn_loss: {pn_val:.2e} | rk_loss: {rk_val:.2e}"
+                    print(label)
 
         except KeyboardInterrupt:
             pass
 
-    # Evaluate the test losses
+    # Evaluate the test losses.
     key, subkey = jax.random.split(key, num=2)
     save_at_test = jnp.sort(jax.random.uniform(key, shape=(100,)))
     save_at_test *= save_at[1] - save_at[0]
     save_at_test += save_at[0]
+
+    key, subkey = jax.random.split(key, num=2)
+    generate = generate_data(vdp, save_at=save_at_test, key=subkey, std=std)
+    test_data_in = data_in
+    test_data_out = jax.vmap(generate)(test_data_in)
+
     test_loss_rk = rk_loss_function(save_at=save_at_test)
     test_loss_pn = pn_loss_function(save_at=save_at_test, std=std)
-    test_data_in = data_in
-    test_data_out = jax.vmap(rk_solve, in_axes=(None, 0, None))(
-        vdp, test_data_in, save_at_test
-    ).ys
     rk_rk = test_loss_rk(rk_best[0], test_data_in, test_data_out)
     rk_pn = test_loss_rk(pn_best[0], test_data_in, test_data_out)
     pn_rk = test_loss_pn(rk_best[0], test_data_in, test_data_out)
