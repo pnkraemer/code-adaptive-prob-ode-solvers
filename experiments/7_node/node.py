@@ -35,30 +35,21 @@ class VanDerPol(eqx.Module):
 
 
 class NeuralODE(eqx.Module):
-    mlp: eqx.Module
+    mlp: eqx.nn.MLP
 
-    def __init__(self, key, *, data_size, width_size, depth):
+    def __init__(self, key):
         self.mlp = eqx.nn.MLP(
-            in_size=data_size,
-            out_size=data_size,
-            width_size=width_size,
-            depth=depth,
-            activation=jax.nn.softplus,
-            key=key,
+            in_size=2, out_size=1, width_size=32, depth=2, activation=jnp.tanh, key=key
         )
-
-    @property
-    def params(self):
-        return self._params
 
     def __call__(self, u, *, t):
         x, y = u
         xdot = y
-        ydot = self.params * (1 - x**2) * y - x
-        return jnp.asarray([xdot, ydot])
+        ydot = self.mlp(u)
+        return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
-def main(num_data=16, std=1e-3, num_epochs=256, num_batches=4):
+def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
     jax.config.update("jax_enable_x64", True)
     impl.select("dense", ode_shape=(2,))
 
@@ -66,39 +57,40 @@ def main(num_data=16, std=1e-3, num_epochs=256, num_batches=4):
     key = jax.random.PRNGKey(1)
 
     # Set up the problem
-    t0, t1 = 0.0, 3.15
+    t0, t1 = 0.0, 1
     save_at = jnp.linspace(t0, t1, num=10)
 
     # Sample data
     key, *subkeys = jax.random.split(key, num=4)
     mu = jax.random.uniform(subkeys[0], shape=())
-    model = VanDerPol(mu)
-    generate = generate_data(model, save_at=save_at, key=subkeys[1], std=std)
+    vdp = VanDerPol(mu)
+    generate = generate_data(vdp, save_at=save_at, key=subkeys[1], std=std)
     data_in = jax.random.uniform(subkeys[2], shape=(num_data, 2))
     data_out = jax.vmap(generate)(data_in)
     print(f"Truth: {mu:.3f}")
 
     # Set up the optimizer
     loss = log_likelihood(save_at=save_at, std=std)
-    loss = jax.jit(jax.value_and_grad(loss))
-    optimizer = optax.adabelief(1e-2)
+    print(f"True loss: {loss(vdp, data_in, data_out):.2e}")
+    loss = eqx.filter_jit(eqx.filter_value_and_grad(loss))
+    optimizer = optax.adam(1e-3)
 
     # Use Equinox's bounded while loop for reverse-differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=100)
     with cfl.context_overwrite_while_loop(loop):
         # Initialise the optimizer
-        r0 = jnp.asarray(0.1)
-        vdp = VanDerPol(r0)
-        opt_state = optimizer.init(vdp)
+        key, subkey = jax.random.split(key, num=2)
+        model = NeuralODE(subkey)
+        opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
 
         # Run the training loop
         data = dataloader(data_in, data_out, num_batches=num_batches)
         for idx, (inputs, outputs) in zip(range(num_epochs), data):
-            val, grads = loss(vdp, inputs, outputs)
+            val, grads = loss(model, inputs, outputs)
             updates, opt_state = optimizer.update(grads, opt_state)
-            vdp = optax.apply_updates(vdp, updates)
+            model = eqx.apply_updates(model, updates)
 
-            label = f"{idx}/{num_epochs} | loss: {val:.2e}, p={vdp.params:.3f}"
+            label = f"{idx}/{num_epochs} | loss: {val:.2e}"
             print(label)
 
 
