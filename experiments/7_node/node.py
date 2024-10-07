@@ -39,6 +39,7 @@ class VanDerPol(eqx.Module):
 
 class NeuralODE(eqx.Module):
     mlp: eqx.nn.MLP
+    sigma: jax.Array
 
     def __init__(self, key):
         self.mlp = eqx.nn.MLP(
@@ -49,6 +50,7 @@ class NeuralODE(eqx.Module):
             activation=jnp.tanh,
             key=key,
         )
+        self.sigma = jnp.asarray(5.0)
 
     def __call__(self, u, *, t):
         return self.mlp(u)
@@ -59,21 +61,22 @@ def main():
     impl.select("isotropic", ode_shape=(2,))
 
     # todo: verify the robustness of the results.
-    # todo: save the solution estimates?
-    # todo: save the losses?
-    # todo: save the errors in a dataframe
 
     # Use Equinox's bounded while loop for reverse-differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=100)
     with cfl.context_overwrite_while_loop(loop):
         # Use different seeds.
         # Discard the "unsuccessful" ones later
-        for rng in [1, 2, 3, 4, 5]:
+        for rng in [2, 3, 4, 5, 1]:  # seed=1 is already amazing
             losses, plots = run(rng, std=0.1)
-            filename = os.path.dirname(__file__) + "/data_losses.npy"
+            filename = os.path.dirname(__file__) + "/data_losses"
             jnp.save(f"{filename}_rng_{rng}_std_{0.1}.npy", losses, allow_pickle=True)
 
-            filename = os.path.dirname(__file__) + "/data_plots.npy"
+            print()
+            print(losses)
+            print()
+
+            filename = os.path.dirname(__file__) + "/data_plots"
             jnp.save(f"{filename}_rng_{rng}_std_{0.1}.npy", plots, allow_pickle=True)
 
 
@@ -128,10 +131,13 @@ def run(seed, std, num_epochs=500, lr=1e-3):
 
             # Print every Xth iteration
             if idx % 10 == 0:
-                label = f"{idx}/{num_epochs} | pn_loss: {pn_val:.2e} | rk_loss: {rk_val:.2e}"
+                label = f"{idx}/{num_epochs} | pn_loss (n-lml): {pn_val:.2e} | rk_loss (mse): {rk_val:.2e}"
                 print(label)
     except KeyboardInterrupt:
         pass
+
+    print(rk_model.sigma)
+    print(pn_model.sigma)
 
     # Evaluate the test losses
 
@@ -166,7 +172,7 @@ def run(seed, std, num_epochs=500, lr=1e-3):
 def generate_data(model_true, *, u0, std):
     def generate(key, save_at):
         noise = jax.random.normal(key, shape=(len(save_at), 2))
-        return pn_solve(model_true, u0=u0, save_at=save_at).u + std * noise
+        return rk_solve(model_true, u0=u0, save_at=save_at).ys + std * noise
 
     return generate
 
@@ -202,7 +208,7 @@ def rk_solve(ode, *, u0, save_at):
 def pn_loss_function(*, u0, std):
     def pn_loss_single(ode, *, save_at, data):
         solution = pn_solve(ode, u0=u0, save_at=save_at)
-        posterior = stats.calibrate(solution.posterior, solution.output_scale)
+        posterior = solution.posterior
 
         std_vec = std * jnp.ones_like(save_at)
 
@@ -225,13 +231,13 @@ def pn_solve(ode, *, u0, save_at):
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
     ts0 = ivpsolvers.correction_ts0(ode_order=1)
     strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
-    pn_solver = ivpsolvers.solver_mle(strategy)
+    pn_solver = ivpsolvers.solver(strategy)
 
     # Set up the initial condition
     t0 = save_at[0]
     vf = functools.partial(ode, t=t0)
     tcoeffs = taylor.odejet_padded_scan(vf, [u0], num=num)
-    output_scale = jnp.ones(())
+    output_scale = 10.0**ode.sigma * jnp.ones(())
     init = pn_solver.initial_condition(tcoeffs, output_scale)
 
     # Build the pn_solver and solve
@@ -240,6 +246,7 @@ def pn_solve(ode, *, u0, save_at):
     solve_fun = functools.partial(ivpsolve.solve_adaptive_save_at, save_at=save_at)
     solve_fun = functools.partial(solve_fun, dt0=0.1)
     solve_fun = functools.partial(solve_fun, adaptive_solver=adaptive_solver)
+
     return solve_fun(ode, init)
 
 
