@@ -41,18 +41,19 @@ class NeuralODE(eqx.Module):
     def __init__(self, key):
         self.mlp = eqx.nn.MLP(
             in_size=2,
-            out_size=1,
+            out_size=2,
             width_size=32,
-            depth=3,
+            depth=2,
             activation=jnp.tanh,
             key=key,
         )
 
     def __call__(self, u, *, t):
-        x, y = u
-        xdot = y
-        ydot = self.mlp(u)
-        return jnp.concatenate([xdot[None], ydot], axis=0)
+        return self.mlp(u)
+        # x, y = u
+        # xdot = y
+        # ydot = self.mlp(u)
+        # return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
 def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
@@ -65,18 +66,16 @@ def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
 
     # Sample data
     key, *subkeys = jax.random.split(key, num=3)
-    vdp = VanDerPol(1.0)
+    vdp = VanDerPol(10.0)
     generate = generate_data(vdp, save_at=save_at, key=subkeys[0], std=std)
     data_in = jax.random.uniform(subkeys[1], shape=(num_data, 2))
     data_out = jax.vmap(generate)(data_in)
 
     # Set up the optimizer
     pn_loss = pn_loss_function(save_at=save_at, std=std)
-    print(f"True pn_loss: {pn_loss(vdp, data_in, data_out):.2e}")
     pn_loss = eqx.filter_jit(eqx.filter_value_and_grad(pn_loss))
 
     rk_loss = rk_loss_function(save_at=save_at)
-    print(f"True rk_loss: {rk_loss(vdp, data_in, data_out):.2e}")
     rk_loss = eqx.filter_jit(eqx.filter_value_and_grad(rk_loss))
 
     # Use Equinox's bounded while loop for reverse-differentiability
@@ -132,11 +131,13 @@ def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
     rk_pn = test_loss_rk(pn_best[0], test_data_in, test_data_out)
     pn_rk = test_loss_pn(rk_best[0], test_data_in, test_data_out)
     pn_pn = test_loss_pn(pn_best[0], test_data_in, test_data_out)
-    print(f"RK loss: \n\tRK={rk_rk:.4e} \n\tPN={rk_pn:.4e}")
-    print(f"PN loss: \n\tRK={pn_rk:.4e} \n\tPN={pn_pn:.4e}")
+    print()
+    print(f"RK loss (MSE): \n\tRK={rk_rk:.4e} \n\tPN={rk_pn:.4e}")
+    print(f"PN loss (LML): \n\tRK={pn_rk:.4e} \n\tPN={pn_pn:.4e}")
+    print()
 
-    # todo: save the figures?
-    # todo: save the losses?
+    # todo: save the estimates and plot?
+    # todo: save the losses and plot?
     #
     #
     # # Plot before and after (at a finer resolution)
