@@ -56,7 +56,7 @@ class NeuralODE(eqx.Module):
         # return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
-def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
+def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
     # Random number generation
     key = jax.random.PRNGKey(seed)
 
@@ -85,11 +85,11 @@ def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
         key, subkey = jax.random.split(key, num=2)
         model_before = NeuralODE(subkey)
         pn_model, rk_model = model_before, model_before
-
         optimizer = optax.adam(lr)
         pn_opt_state = optimizer.init(eqx.filter(pn_model, eqx.is_inexact_array))
         rk_opt_state = optimizer.init(eqx.filter(rk_model, eqx.is_inexact_array))
 
+        # Store the best-so-far results. '10_000' is a dummy for 'large loss'.
         rk_best = (rk_model, 10_000)
         pn_best = (pn_model, 10_000)
 
@@ -148,9 +148,6 @@ def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
     # rk_after = rk_solve(rk_best[0], data_in[0], save_at=save_at_plot).ys
     # pn_after = pn_solve(pn_best[0], data_in[0], save_at=save_at_plot).u
 
-    # # todo: use the loss functions instead of
-    # print("RK error:", jnp.linalg.norm(rk_after - truth) / jnp.sqrt(truth.size))
-    # print("PN error:", jnp.linalg.norm(pn_after - truth) / jnp.sqrt(truth.size))
     #
     # plt.plot(save_at_plot, before, color="C0", label="Before")
     # plt.plot(save_at_plot, rk_after, color="C1", alpha=0.5, label="After (RK)")
