@@ -110,10 +110,10 @@ def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
                 if rk_val < rk_best[1]:
                     rk_best = (rk_model, rk_val)
 
-                if idx % 5 == 0:
+                # Print every Xth iteration
+                if idx % 10 == 0:
                     label = f"{idx}/{num_epochs} | pn_loss: {pn_val:.2e} | rk_loss: {rk_val:.2e}"
                     print(label)
-
         except KeyboardInterrupt:
             pass
 
@@ -134,15 +134,7 @@ def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
     rk_pn = test_loss_rk(pn_best[0], test_data_in, test_data_out)
     pn_rk = test_loss_pn(rk_best[0], test_data_in, test_data_out)
     pn_pn = test_loss_pn(pn_best[0], test_data_in, test_data_out)
-    print()
-    print(f"RK loss (MSE): \n\tRK={rk_rk:.4e} \n\tPN={rk_pn:.4e}")
-    print(f"PN loss (LML): \n\tRK={pn_rk:.4e} \n\tPN={pn_pn:.4e}")
-    print()
 
-    # todo: save the estimates and plot?
-    # todo: save the losses and plot?
-    #
-    #
     # # Plot before and after (at a finer resolution)
     # save_at_plot = jnp.linspace(save_at[0], save_at[-1], num=100)
     # before = pn_solve(model_before, data_in[0], save_at=save_at_plot).u
@@ -162,6 +154,11 @@ def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
     # by_label = dict(zip(labels, handles))
     # plt.legend(by_label.values(), by_label.keys())
     # plt.show()
+
+    print()
+    print(f"RK loss (MSE): \n\tRK={rk_rk:.4e} \n\tPN={rk_pn:.4e}")
+    print(f"PN loss (LML): \n\tRK={pn_rk:.4e} \n\tPN={pn_pn:.4e}")
+    print()
 
 
 def generate_data(model_true, *, save_at, key, std):
@@ -269,5 +266,12 @@ if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
     impl.select("isotropic", ode_shape=(2,))
 
-    for rng in [1, 2, 3]:
+    # Ignore the ones where the test losses are really large
+    # todo: verify the robustness of the results.
+    # todo: simplify the code (eg, no more dataloader)
+    # todo: save the solution estimates?
+    # todo: save the losses?
+    # todo: save the errors in a dataframe
+    #
+    for rng in [1, 2, 3, 4, 5]:
         main(rng)
