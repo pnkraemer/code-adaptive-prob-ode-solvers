@@ -44,7 +44,7 @@ class NeuralODE(eqx.Module):
             in_size=2,
             out_size=1,
             width_size=32,
-            depth=2,
+            depth=3,
             activation=jnp.tanh,
             key=key,
         )
@@ -56,32 +56,30 @@ class NeuralODE(eqx.Module):
         return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
-def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
+def main(seed=1, num_data=1, std=1.0, num_epochs=1_000, num_batches=1, lr=1e-3):
     jax.config.update("jax_enable_x64", True)
-    impl.select("isotropic", ode_shape=(2,))
+    impl.select("dense", ode_shape=(2,))
 
     # Random number generation
     key = jax.random.PRNGKey(seed)
 
     # Set up the problem
-    t0, t1 = 0.0, 2 * 6.3
-    save_at = jnp.linspace(t0, t1, num=10)
+    t0, t1 = 0.0, 6.3
+    save_at = jnp.linspace(t0, t1, num=20)
 
     # Sample data
-    key, *subkeys = jax.random.split(key, num=4)
-    mu = 5 * jax.random.uniform(subkeys[0], shape=())
-    vdp = VanDerPol(mu)
-    generate = generate_data(vdp, save_at=save_at, key=subkeys[1], std=std)
-    data_in = jax.random.uniform(subkeys[2], shape=(num_data, 2))
+    key, *subkeys = jax.random.split(key, num=3)
+    vdp = VanDerPol(1.0)
+    generate = generate_data(vdp, save_at=save_at, key=subkeys[0], std=std)
+    data_in = jax.random.uniform(subkeys[1], shape=(num_data, 2))
     data_out = jax.vmap(generate)(data_in)
-    print(f"Truth: {mu:.3f}")
 
     # Set up the optimizer
     pn_loss = pn_loss_function(save_at=save_at, std=std)
     print(f"True pn_loss: {pn_loss(vdp, data_in, data_out):.2e}")
     pn_loss = eqx.filter_jit(eqx.filter_value_and_grad(pn_loss))
 
-    rk_loss = rk_loss_function(save_at=save_at, std=std)
+    rk_loss = rk_loss_function(save_at=save_at)
     print(f"True rk_loss: {rk_loss(vdp, data_in, data_out):.2e}")
     rk_loss = eqx.filter_jit(eqx.filter_value_and_grad(rk_loss))
 
@@ -123,11 +121,15 @@ def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
 
     rk_after = rk_solve(rk_model, data_in[0], save_at=save_at_plot).ys
     pn_after = pn_solve(pn_model, data_in[0], save_at=save_at_plot).u
+
+    print("RK error:", jnp.linalg.norm(rk_after - truth))
+    print("PN error:", jnp.linalg.norm(pn_after - truth))
+
     plt.plot(save_at_plot, before, color="C0", label="Before")
-    plt.plot(save_at_plot, rk_after, color="C1", label="After (RK)")
-    plt.plot(save_at_plot, pn_after, color="C2", label="After (PN)")
-    plt.plot(save_at_plot, truth, "-", color="black", label="Truth")
-    plt.plot(save_at, data_out[0], "x", color="black", label="Data")
+    plt.plot(save_at_plot, rk_after, color="C1", alpha=0.5, label="After (RK)")
+    plt.plot(save_at_plot, pn_after, color="C2", alpha=0.5, label="After (PN)")
+    plt.plot(save_at_plot, truth, "-", color="black", label="Truth", zorder=0)
+    plt.plot(save_at, data_out[0], "x", color="black", label="Data", zorder=0)
 
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
@@ -172,7 +174,7 @@ def pn_loss_function(*, save_at, std):
     return pn_loss
 
 
-def rk_loss_function(*, save_at, std):
+def rk_loss_function(*, save_at):
     def rk_loss(ode, data_in, data_out):
         pn_losses = rk_loss_single(ode, data_in, data_out)
         return jnp.mean(pn_losses)
@@ -208,14 +210,14 @@ def rk_solve(ode, data_in, save_at):
 def pn_solve(ode, data_in, save_at):
     # Any relatively-high-accuracy solution works.
     # Why? Plot the pn_loss-landscape
-    num = 3
-    rtol = 1e-3
-    atol = 1e-6
+    num = 4
+    rtol = 1e-2
+    atol = 1e-4
 
     # Set up the solver
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
-    ts0 = ivpsolvers.correction_ts0(ode_order=1)
-    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
+    ts1 = ivpsolvers.correction_ts1(ode_order=1)
+    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts1)
     pn_solver = ivpsolvers.solver(strategy)
 
     # Set up the initial condition
