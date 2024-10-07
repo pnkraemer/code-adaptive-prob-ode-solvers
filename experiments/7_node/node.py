@@ -63,7 +63,7 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
     key = jax.random.PRNGKey(1)
 
     # Set up the problem
-    t0, t1 = 0.0, 6.3  # todo: as large as we can without messing training up
+    t0, t1 = 0.0, 12.6  # todo: as large as we can without messing training up
     save_at = jnp.linspace(t0, t1, num=10)
 
     # Sample data
@@ -91,7 +91,8 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
         opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
 
         # Run the training loop
-        data = dataloader(data_in, data_out, num_batches=num_batches)
+        key, subkey = jax.random.split(key, num=2)
+        data = dataloader(data_in, data_out, key=subkey, num_batches=num_batches)
         for idx, (inputs, outputs) in zip(range(num_epochs), data):
             val, grads = loss(model, inputs, outputs)
             updates, opt_state = optimizer.update(grads, opt_state)
@@ -118,11 +119,10 @@ def generate_data(model_true, *, save_at, key, std):
     return generate
 
 
-def dataloader(inputs, outputs, /, *, num_batches):
+def dataloader(inputs, outputs, /, *, key, num_batches):
     assert len(inputs) % num_batches == 0, (len(inputs), num_batches)
 
     idx = jnp.arange(len(inputs))
-    key = jax.random.PRNGKey(4123)
     while True:
         key, subkey = jax.random.split(key, num=2)
         idx = jax.random.permutation(subkey, idx)
