@@ -56,7 +56,7 @@ class NeuralODE(eqx.Module):
         # return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
-def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
+def main(seed, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
     # Random number generation
     key = jax.random.PRNGKey(seed)
 
@@ -68,8 +68,8 @@ def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
     key, *subkeys = jax.random.split(key, num=3)
     vdp = VanDerPol(10.0)
     generate = generate_data(vdp, save_at=save_at, key=subkeys[0], std=std)
-    data_in = jax.random.uniform(subkeys[1], shape=(num_data, 2))
-    data_out = jax.vmap(generate)(data_in)
+    data_in = jax.random.uniform(subkeys[1], shape=(2,))
+    data_out = generate(data_in)
 
     # Set up the optimizer
     pn_loss = pn_loss_function(save_at=save_at, std=std)
@@ -95,16 +95,14 @@ def main(seed, num_data=1, std=0.1, num_epochs=500, num_batches=1, lr=1e-3):
 
         # Run the training loop
         try:
-            key, subkey = jax.random.split(key, num=2)
-            data = dataloader(data_in, data_out, key=subkey, num_batches=num_batches)
-            for idx, (inputs, outputs) in zip(range(num_epochs), data):
-                pn_val, pn_grads = pn_loss(pn_model, inputs, outputs)
+            for idx in range(num_epochs):
+                pn_val, pn_grads = pn_loss(pn_model, data_in, data_out)
                 pn_updates, pn_opt_state = optimizer.update(pn_grads, pn_opt_state)
                 pn_model = eqx.apply_updates(pn_model, pn_updates)
                 if pn_val < pn_best[1]:
                     pn_best = (pn_model, pn_val)
 
-                rk_val, rk_grads = rk_loss(rk_model, inputs, outputs)
+                rk_val, rk_grads = rk_loss(rk_model, data_in, data_out)
                 rk_updates, rk_opt_state = optimizer.update(rk_grads, rk_opt_state)
                 rk_model = eqx.apply_updates(rk_model, rk_updates)
                 if rk_val < rk_best[1]:
@@ -181,11 +179,6 @@ def dataloader(inputs, outputs, /, *, key, num_batches):
 
 
 def pn_loss_function(*, save_at, std):
-    def pn_loss(ode, data_in, data_out):
-        pn_losses = pn_loss_single(ode, data_in, data_out)
-        return jnp.mean(pn_losses)
-
-    @functools.partial(jax.vmap, in_axes=(None, 0, 0))
     def pn_loss_single(ode, u0, truth):
         solution = pn_solve(ode, u0, save_at=save_at)
         posterior = stats.calibrate(solution.posterior, solution.output_scale)
@@ -197,20 +190,15 @@ def pn_loss_function(*, save_at, std):
         lml = functools.partial(lml, standard_deviation=std_vec)
         return -lml(truth)
 
-    return pn_loss
+    return pn_loss_single
 
 
 def rk_loss_function(*, save_at):
-    def rk_loss(ode, data_in, data_out):
-        pn_losses = rk_loss_single(ode, data_in, data_out)
-        return jnp.mean(pn_losses)
-
-    @functools.partial(jax.vmap, in_axes=(None, 0, 0))
     def rk_loss_single(ode, u0, truth):
         solution = rk_solve(ode, u0, save_at=save_at)
         return jnp.mean(jnp.square(solution.ys - truth))
 
-    return rk_loss
+    return rk_loss_single
 
 
 def rk_solve(ode, data_in, save_at):
