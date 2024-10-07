@@ -39,7 +39,7 @@ class VanDerPol(eqx.Module):
 
 class NeuralODE(eqx.Module):
     mlp: eqx.nn.MLP
-    sigma: jax.Array
+    sigma: jax.Array  # is it hacky to include it here? After all, it's the model...
 
     def __init__(self, key):
         self.mlp = eqx.nn.MLP(
@@ -50,7 +50,7 @@ class NeuralODE(eqx.Module):
             activation=jnp.tanh,
             key=key,
         )
-        self.sigma = jnp.asarray(5.0)
+        self.sigma = jnp.asarray(4.0)
 
     def __call__(self, u, *, t):
         return self.mlp(u)
@@ -67,17 +67,18 @@ def main():
     with cfl.context_overwrite_while_loop(loop):
         # Use different seeds.
         # Discard the "unsuccessful" ones later
-        for rng in [2, 3, 4, 5, 1]:  # seed=1 is already amazing
-            losses, plots = run(rng, std=0.1)
+        for rng in [1, 2, 3]:
+            s = 0.1
+            losses, plots = run(rng, std=s)
             filename = os.path.dirname(__file__) + "/data_losses"
-            jnp.save(f"{filename}_rng_{rng}_std_{0.1}.npy", losses, allow_pickle=True)
+            jnp.save(f"{filename}_rng_{rng}_std_{s}.npy", losses, allow_pickle=True)
 
             print()
             print(losses)
             print()
 
             filename = os.path.dirname(__file__) + "/data_plots"
-            jnp.save(f"{filename}_rng_{rng}_std_{0.1}.npy", plots, allow_pickle=True)
+            jnp.save(f"{filename}_rng_{rng}_std_{s}.npy", plots, allow_pickle=True)
 
 
 def run(seed, std, num_epochs=500, lr=1e-3):
@@ -85,11 +86,10 @@ def run(seed, std, num_epochs=500, lr=1e-3):
     key = jax.random.PRNGKey(seed)
 
     # Set up the problem
-    t0, t1 = 0.0, 6.3
+    t0, t1 = 0.0, 6.3 * 3
     save_at = jnp.linspace(t0, t1, num=20)
-    vdp = VanDerPol(10.0)
-    key, subkey = jax.random.split(key, num=2)
-    u0 = jax.random.uniform(subkey, shape=(2,))
+    vdp = VanDerPol(1.0)
+    u0 = jnp.array([2.0, 0.0])
 
     # Sample data
     generate = generate_data(vdp, u0=u0, std=std)
@@ -129,8 +129,8 @@ def run(seed, std, num_epochs=500, lr=1e-3):
             if rk_val < rk_best[1]:
                 rk_best = (rk_model, rk_val)
 
-            # Print every Xth iteration
-            if idx % 10 == 0:
+            # Print every K-th iteration
+            if idx % 20 == 0:
                 label = f"{idx}/{num_epochs} | pn_loss (n-lml): {pn_val:.2e} | rk_loss (mse): {rk_val:.2e}"
                 print(label)
     except KeyboardInterrupt:
