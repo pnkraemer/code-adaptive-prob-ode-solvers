@@ -57,7 +57,7 @@ class NeuralODE(eqx.Module):
 
 def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
     jax.config.update("jax_enable_x64", True)
-    impl.select("dense", ode_shape=(2,))
+    impl.select("isotropic", ode_shape=(2,))
 
     # Random number generation
     key = jax.random.PRNGKey(1)
@@ -156,8 +156,8 @@ def solve(ode, data_in, save_at):
 
     # Set up the solver
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
-    ts1 = ivpsolvers.correction_ts1(ode_order=1)
-    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts1)
+    ts0 = ivpsolvers.correction_ts0(ode_order=1)
+    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
     solver = ivpsolvers.solver(strategy)  # why? plot loss-landscape
 
     # Set up the initial condition
