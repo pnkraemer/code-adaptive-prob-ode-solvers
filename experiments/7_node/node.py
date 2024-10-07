@@ -16,7 +16,6 @@ import optax
 from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.backend import control_flow as cfl
 from probdiffeq.impl import impl
-import matplotlib.pyplot as plt
 
 
 class VanDerPol(eqx.Module):
@@ -56,10 +55,7 @@ class NeuralODE(eqx.Module):
         return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
-def main(seed=1, num_data=1, std=1.0, num_epochs=1_000, num_batches=1, lr=1e-3):
-    jax.config.update("jax_enable_x64", True)
-    impl.select("dense", ode_shape=(2,))
-
+def main(seed, num_data=1, std=0.5, num_epochs=150, num_batches=1, lr=1e-3):
     # Random number generation
     key = jax.random.PRNGKey(seed)
 
@@ -95,6 +91,9 @@ def main(seed=1, num_data=1, std=1.0, num_epochs=1_000, num_batches=1, lr=1e-3):
         pn_opt_state = optimizer.init(eqx.filter(pn_model, eqx.is_inexact_array))
         rk_opt_state = optimizer.init(eqx.filter(rk_model, eqx.is_inexact_array))
 
+        rk_best = (rk_model, 10_000)
+        pn_best = (pn_model, 10_000)
+
         # Run the training loop
         try:
             key, subkey = jax.random.split(key, num=2)
@@ -103,10 +102,14 @@ def main(seed=1, num_data=1, std=1.0, num_epochs=1_000, num_batches=1, lr=1e-3):
                 pn_val, pn_grads = pn_loss(pn_model, inputs, outputs)
                 pn_updates, pn_opt_state = optimizer.update(pn_grads, pn_opt_state)
                 pn_model = eqx.apply_updates(pn_model, pn_updates)
+                if pn_val < pn_best[1]:
+                    pn_best = (pn_model, pn_val)
 
                 rk_val, rk_grads = rk_loss(rk_model, inputs, outputs)
                 rk_updates, rk_opt_state = optimizer.update(rk_grads, rk_opt_state)
                 rk_model = eqx.apply_updates(rk_model, rk_updates)
+                if rk_val < rk_best[1]:
+                    rk_best = (rk_model, rk_val)
 
                 label = f"{idx}/{num_epochs} | pn_loss: {pn_val:.2e} | rk_loss: {rk_val:.2e}"
                 print(label)
@@ -114,27 +117,50 @@ def main(seed=1, num_data=1, std=1.0, num_epochs=1_000, num_batches=1, lr=1e-3):
         except KeyboardInterrupt:
             pass
 
-    # Plot before and after (at a finer resolution)
-    save_at_plot = jnp.linspace(save_at[0], save_at[-1], num=100)
-    before = pn_solve(model_before, data_in[0], save_at=save_at_plot).u
-    truth = pn_solve(vdp, data_in[0], save_at=save_at_plot).u
+    # Evaluate the test losses
+    key, subkey = jax.random.split(key, num=2)
+    save_at_test = jnp.sort(jax.random.uniform(key, shape=(100,)))
+    save_at_test *= save_at[1] - save_at[0]
+    save_at_test += save_at[0]
+    test_loss_rk = rk_loss_function(save_at=save_at_test)
+    test_loss_pn = pn_loss_function(save_at=save_at_test, std=std)
+    test_data_in = data_in
+    test_data_out = jax.vmap(rk_solve, in_axes=(None, 0, None))(
+        vdp, test_data_in, save_at_test
+    ).ys
+    rk_rk = test_loss_rk(rk_best[0], test_data_in, test_data_out)
+    rk_pn = test_loss_rk(pn_best[0], test_data_in, test_data_out)
+    pn_rk = test_loss_pn(rk_best[0], test_data_in, test_data_out)
+    pn_pn = test_loss_pn(pn_best[0], test_data_in, test_data_out)
+    print(f"RK loss: \n\tRK={rk_rk:.4e} \n\tPN={rk_pn:.4e}")
+    print(f"PN loss: \n\tRK={pn_rk:.4e} \n\tPN={pn_pn:.4e}")
 
-    rk_after = rk_solve(rk_model, data_in[0], save_at=save_at_plot).ys
-    pn_after = pn_solve(pn_model, data_in[0], save_at=save_at_plot).u
+    # todo: save the figures?
+    # todo: save the losses?
+    #
+    #
+    # # Plot before and after (at a finer resolution)
+    # save_at_plot = jnp.linspace(save_at[0], save_at[-1], num=100)
+    # before = pn_solve(model_before, data_in[0], save_at=save_at_plot).u
+    # truth = pn_solve(vdp, data_in[0], save_at=save_at_plot).u
+    #
+    # rk_after = rk_solve(rk_best[0], data_in[0], save_at=save_at_plot).ys
+    # pn_after = pn_solve(pn_best[0], data_in[0], save_at=save_at_plot).u
 
-    print("RK error:", jnp.linalg.norm(rk_after - truth))
-    print("PN error:", jnp.linalg.norm(pn_after - truth))
-
-    plt.plot(save_at_plot, before, color="C0", label="Before")
-    plt.plot(save_at_plot, rk_after, color="C1", alpha=0.5, label="After (RK)")
-    plt.plot(save_at_plot, pn_after, color="C2", alpha=0.5, label="After (PN)")
-    plt.plot(save_at_plot, truth, "-", color="black", label="Truth", zorder=0)
-    plt.plot(save_at, data_out[0], "x", color="black", label="Data", zorder=0)
-
-    handles, labels = plt.gca().get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys())
-    plt.show()
+    # # todo: use the loss functions instead of
+    # print("RK error:", jnp.linalg.norm(rk_after - truth) / jnp.sqrt(truth.size))
+    # print("PN error:", jnp.linalg.norm(pn_after - truth) / jnp.sqrt(truth.size))
+    #
+    # plt.plot(save_at_plot, before, color="C0", label="Before")
+    # plt.plot(save_at_plot, rk_after, color="C1", alpha=0.5, label="After (RK)")
+    # plt.plot(save_at_plot, pn_after, color="C2", alpha=0.5, label="After (PN)")
+    # plt.plot(save_at_plot, truth, "-", color="black", label="Truth", zorder=0)
+    # plt.plot(save_at, data_out[0], "x", color="black", label="Data", zorder=0)
+    #
+    # handles, labels = plt.gca().get_legend_handles_labels()
+    # by_label = dict(zip(labels, handles))
+    # plt.legend(by_label.values(), by_label.keys())
+    # plt.show()
 
 
 def generate_data(model_true, *, save_at, key, std):
@@ -164,10 +190,12 @@ def pn_loss_function(*, save_at, std):
     @functools.partial(jax.vmap, in_axes=(None, 0, 0))
     def pn_loss_single(ode, u0, truth):
         solution = pn_solve(ode, u0, save_at=save_at)
+        posterior = stats.calibrate(solution.posterior, solution.output_scale)
+
         std_vec = std * jnp.ones_like(save_at)
 
         lml = stats.log_marginal_likelihood
-        lml = functools.partial(lml, posterior=solution.posterior)
+        lml = functools.partial(lml, posterior=posterior)
         lml = functools.partial(lml, standard_deviation=std_vec)
         return -lml(truth)
 
@@ -199,7 +227,7 @@ def rk_solve(ode, data_in, save_at):
         diffrax.Tsit5(),
         t0=save_at[0],
         t1=save_at[-1],
-        dt0=save_at[1] - save_at[0],
+        dt0=0.1,
         y0=data_in,
         stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
         saveat=diffrax.SaveAt(ts=save_at),
@@ -211,14 +239,14 @@ def pn_solve(ode, data_in, save_at):
     # Any relatively-high-accuracy solution works.
     # Why? Plot the pn_loss-landscape
     num = 4
-    rtol = 1e-2
-    atol = 1e-4
+    rtol = 1e-3
+    atol = 1e-6
 
     # Set up the solver
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
-    ts1 = ivpsolvers.correction_ts1(ode_order=1)
-    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts1)
-    pn_solver = ivpsolvers.solver(strategy)
+    ts0 = ivpsolvers.correction_ts0(ode_order=1)
+    strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
+    pn_solver = ivpsolvers.solver_mle(strategy)
 
     # Set up the initial condition
     t0 = save_at[0]
@@ -237,4 +265,8 @@ def pn_solve(ode, data_in, save_at):
 
 
 if __name__ == "__main__":
-    main()
+    jax.config.update("jax_enable_x64", True)
+    impl.select("isotropic", ode_shape=(2,))
+
+    for rng in [1, 2, 3]:
+        main(rng)
