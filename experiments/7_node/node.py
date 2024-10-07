@@ -7,6 +7,7 @@ What's the point?
 
 """
 
+import diffrax
 import functools
 import equinox as eqx
 import jax
@@ -57,7 +58,7 @@ class NeuralODE(eqx.Module):
 
 def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
     jax.config.update("jax_enable_x64", True)
-    impl.select("blockdiag", ode_shape=(2,))
+    impl.select("isotropic", ode_shape=(2,))
 
     # Random number generation
     key = jax.random.PRNGKey(seed)
@@ -68,7 +69,7 @@ def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
 
     # Sample data
     key, *subkeys = jax.random.split(key, num=4)
-    mu = 10 * jax.random.uniform(subkeys[0], shape=())
+    mu = 5 * jax.random.uniform(subkeys[0], shape=())
     vdp = VanDerPol(mu)
     generate = generate_data(vdp, save_at=save_at, key=subkeys[1], std=std)
     data_in = jax.random.uniform(subkeys[2], shape=(num_data, 2))
@@ -79,39 +80,58 @@ def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
     pn_loss = pn_loss_function(save_at=save_at, std=std)
     print(f"True pn_loss: {pn_loss(vdp, data_in, data_out):.2e}")
     pn_loss = eqx.filter_jit(eqx.filter_value_and_grad(pn_loss))
-    optimizer = optax.adam(lr)
+
+    rk_loss = rk_loss_function(save_at=save_at, std=std)
+    print(f"True rk_loss: {rk_loss(vdp, data_in, data_out):.2e}")
+    rk_loss = eqx.filter_jit(eqx.filter_value_and_grad(rk_loss))
 
     # Use Equinox's bounded while loop for reverse-differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=100)
     with cfl.context_overwrite_while_loop(loop):
         # Initialise the optimizer
         key, subkey = jax.random.split(key, num=2)
-        pn_model_before = NeuralODE(subkey)
-        pn_model = pn_model_before
+        model_before = NeuralODE(subkey)
+        pn_model, rk_model = model_before, model_before
+
+        optimizer = optax.adam(lr)
         pn_opt_state = optimizer.init(eqx.filter(pn_model, eqx.is_inexact_array))
+        rk_opt_state = optimizer.init(eqx.filter(rk_model, eqx.is_inexact_array))
 
         # Run the training loop
         try:
             key, subkey = jax.random.split(key, num=2)
             data = dataloader(data_in, data_out, key=subkey, num_batches=num_batches)
             for idx, (inputs, outputs) in zip(range(num_epochs), data):
-                val, grads = pn_loss(pn_model, inputs, outputs)
-                updates, pn_opt_state = optimizer.update(grads, pn_opt_state)
-                pn_model = eqx.apply_updates(pn_model, updates)
+                pn_val, pn_grads = pn_loss(pn_model, inputs, outputs)
+                pn_updates, pn_opt_state = optimizer.update(pn_grads, pn_opt_state)
+                pn_model = eqx.apply_updates(pn_model, pn_updates)
 
-                label = f"{idx}/{num_epochs} | pn_loss: {val:.2e}"
+                rk_val, rk_grads = rk_loss(rk_model, inputs, outputs)
+                rk_updates, rk_opt_state = optimizer.update(rk_grads, rk_opt_state)
+                rk_model = eqx.apply_updates(rk_model, rk_updates)
+
+                label = f"{idx}/{num_epochs} | pn_loss: {pn_val:.2e} | rk_loss: {rk_val:.2e}"
                 print(label)
+
         except KeyboardInterrupt:
             pass
 
     # Plot before and after (at a finer resolution)
     save_at_plot = jnp.linspace(save_at[0], save_at[-1], num=100)
-    before = pn_solve(pn_model_before, data_in[0], save_at=save_at_plot)
-    after = pn_solve(pn_model, data_in[0], save_at=save_at_plot)
-    plt.plot(save_at_plot, before.u, color="C0", label="Before")
-    plt.plot(save_at_plot, after.u, color="C1", label="After")
-    plt.plot(save_at, data_out[0], "x", color="C2", label="Data")
-    plt.legend()
+    before = pn_solve(model_before, data_in[0], save_at=save_at_plot).u
+    truth = pn_solve(vdp, data_in[0], save_at=save_at_plot).u
+
+    rk_after = rk_solve(rk_model, data_in[0], save_at=save_at_plot).ys
+    pn_after = pn_solve(pn_model, data_in[0], save_at=save_at_plot).u
+    plt.plot(save_at_plot, before, color="C0", label="Before")
+    plt.plot(save_at_plot, rk_after, color="C1", label="After (RK)")
+    plt.plot(save_at_plot, pn_after, color="C2", label="After (PN)")
+    plt.plot(save_at_plot, truth, "-", color="black", label="Truth")
+    plt.plot(save_at, data_out[0], "x", color="black", label="Data")
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
     plt.show()
 
 
@@ -152,11 +172,45 @@ def pn_loss_function(*, save_at, std):
     return pn_loss
 
 
+def rk_loss_function(*, save_at, std):
+    def rk_loss(ode, data_in, data_out):
+        pn_losses = rk_loss_single(ode, data_in, data_out)
+        return jnp.mean(pn_losses)
+
+    @functools.partial(jax.vmap, in_axes=(None, 0, 0))
+    def rk_loss_single(ode, u0, truth):
+        solution = rk_solve(ode, u0, save_at=save_at)
+        return jnp.mean(jnp.square(solution.ys - truth))
+
+    return rk_loss
+
+
+def rk_solve(ode, data_in, save_at):
+    def func(t, y, args):
+        return ode(y, t=t)
+
+    rtol = 1e-3
+    atol = 1e-6
+
+    solution = diffrax.diffeqsolve(
+        diffrax.ODETerm(func),
+        diffrax.Tsit5(),
+        t0=save_at[0],
+        t1=save_at[-1],
+        dt0=save_at[1] - save_at[0],
+        y0=data_in,
+        stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
+        saveat=diffrax.SaveAt(ts=save_at),
+    )
+    return solution
+
+
 def pn_solve(ode, data_in, save_at):
     # Any relatively-high-accuracy solution works.
     # Why? Plot the pn_loss-landscape
     num = 3
-    tol = 1e-4
+    rtol = 1e-3
+    atol = 1e-6
 
     # Set up the solver
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
@@ -168,12 +222,12 @@ def pn_solve(ode, data_in, save_at):
     t0 = save_at[0]
     vf = functools.partial(ode, t=t0)
     tcoeffs = taylor.odejet_padded_scan(vf, [data_in], num=num)
-    output_scale = jnp.ones((2,))
+    output_scale = jnp.ones(())
     init = pn_solver.initial_condition(tcoeffs, output_scale)
 
     # Build the pn_solver and solve
     ctrl = ivpsolve.control_proportional_integral()
-    adaptive_solver = ivpsolve.adaptive(pn_solver, atol=tol, rtol=tol, control=ctrl)
+    adaptive_solver = ivpsolve.adaptive(pn_solver, atol=atol, rtol=rtol, control=ctrl)
     solve_fun = functools.partial(ivpsolve.solve_adaptive_save_at, save_at=save_at)
     solve_fun = functools.partial(solve_fun, dt0=0.1)
     solve_fun = functools.partial(solve_fun, adaptive_solver=adaptive_solver)
