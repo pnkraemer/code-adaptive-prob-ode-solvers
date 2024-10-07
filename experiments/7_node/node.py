@@ -55,20 +55,20 @@ class NeuralODE(eqx.Module):
         return jnp.concatenate([xdot[None], ydot], axis=0)
 
 
-def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
+def main(seed=1, num_data=1, std=0.5, num_epochs=1_000, num_batches=1, lr=1e-2):
     jax.config.update("jax_enable_x64", True)
-    impl.select("isotropic", ode_shape=(2,))
+    impl.select("blockdiag", ode_shape=(2,))
 
     # Random number generation
-    key = jax.random.PRNGKey(1)
+    key = jax.random.PRNGKey(seed)
 
     # Set up the problem
-    t0, t1 = 0.0, 12.6  # todo: as large as we can without messing training up
+    t0, t1 = 0.0, 2 * 6.3
     save_at = jnp.linspace(t0, t1, num=10)
 
     # Sample data
     key, *subkeys = jax.random.split(key, num=4)
-    mu = jax.random.uniform(subkeys[0], shape=())
+    mu = 10 * jax.random.uniform(subkeys[0], shape=())
     vdp = VanDerPol(mu)
     generate = generate_data(vdp, save_at=save_at, key=subkeys[1], std=std)
     data_in = jax.random.uniform(subkeys[2], shape=(num_data, 2))
@@ -79,7 +79,7 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
     loss = log_likelihood(save_at=save_at, std=std)
     print(f"True loss: {loss(vdp, data_in, data_out):.2e}")
     loss = eqx.filter_jit(eqx.filter_value_and_grad(loss))
-    optimizer = optax.adam(1e-2)
+    optimizer = optax.adam(lr)
 
     # Use Equinox's bounded while loop for reverse-differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=100)
@@ -91,21 +91,25 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
         opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
 
         # Run the training loop
-        key, subkey = jax.random.split(key, num=2)
-        data = dataloader(data_in, data_out, key=subkey, num_batches=num_batches)
-        for idx, (inputs, outputs) in zip(range(num_epochs), data):
-            val, grads = loss(model, inputs, outputs)
-            updates, opt_state = optimizer.update(grads, opt_state)
-            model = eqx.apply_updates(model, updates)
+        try:
+            key, subkey = jax.random.split(key, num=2)
+            data = dataloader(data_in, data_out, key=subkey, num_batches=num_batches)
+            for idx, (inputs, outputs) in zip(range(num_epochs), data):
+                val, grads = loss(model, inputs, outputs)
+                updates, opt_state = optimizer.update(grads, opt_state)
+                model = eqx.apply_updates(model, updates)
 
-            label = f"{idx}/{num_epochs} | loss: {val:.2e}"
-            print(label)
+                label = f"{idx}/{num_epochs} | loss: {val:.2e}"
+                print(label)
+        except KeyboardInterrupt:
+            pass
 
-    # Plot before and after
-    before = solve(model_before, data_in[0], save_at=save_at)
-    after = solve(model, data_in[0], save_at=save_at)
-    plt.plot(save_at, before.u, color="C0", label="Before")
-    plt.plot(save_at, after.u, color="C1", label="After")
+    # Plot before and after (at a finer resolution)
+    save_at_plot = jnp.linspace(save_at[0], save_at[-1], num=100)
+    before = solve(model_before, data_in[0], save_at=save_at_plot)
+    after = solve(model, data_in[0], save_at=save_at_plot)
+    plt.plot(save_at_plot, before.u, color="C0", label="Before")
+    plt.plot(save_at_plot, after.u, color="C1", label="After")
     plt.plot(save_at, data_out[0], "x", color="C2", label="Data")
     plt.legend()
     plt.show()
@@ -158,13 +162,13 @@ def solve(ode, data_in, save_at):
     ibm = ivpsolvers.prior_ibm(num_derivatives=num)
     ts0 = ivpsolvers.correction_ts0(ode_order=1)
     strategy = ivpsolvers.strategy_fixedpoint(ibm, ts0)
-    solver = ivpsolvers.solver(strategy)  # why? plot loss-landscape
+    solver = ivpsolvers.solver(strategy)
 
     # Set up the initial condition
     t0 = save_at[0]
     vf = functools.partial(ode, t=t0)
     tcoeffs = taylor.odejet_padded_scan(vf, [data_in], num=num)
-    output_scale = 1e0  # or any other value with the same shape
+    output_scale = jnp.ones((2,))
     init = solver.initial_condition(tcoeffs, output_scale)
 
     # Build the solver and solve
