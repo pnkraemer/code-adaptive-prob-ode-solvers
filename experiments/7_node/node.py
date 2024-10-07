@@ -70,16 +70,13 @@ def main(num_data=16, std=1e-3, num_epochs=256, num_batches=4):
     save_at = jnp.linspace(t0, t1, num=10)
 
     # Sample data
-    key, subkey = jax.random.split(key, num=2)
-    mu = jax.random.uniform(key, shape=())
-    model_true = VanDerPol(mu)
-    key, subkey = jax.random.split(key, num=2)
-    generate = generate_data(model_true, save_at=save_at, key=subkey, std=std)
+    key, *subkeys = jax.random.split(key, num=4)
+    mu = jax.random.uniform(subkeys[0], shape=())
+    model = VanDerPol(mu)
+    generate = generate_data(model, save_at=save_at, key=subkeys[1], std=std)
+    data_in = jax.random.uniform(subkeys[2], shape=(num_data, 2))
+    data_out = jax.vmap(generate)(data_in)
     print(f"Truth: {mu:.3f}")
-
-    key, subkey = jax.random.split(key, num=2)
-    u0s = jax.random.uniform(subkey, shape=(num_data, 2))
-    truths = jax.vmap(generate)(u0s)
 
     # Set up the optimizer
     loss = log_likelihood(save_at=save_at, std=std)
@@ -95,8 +92,8 @@ def main(num_data=16, std=1e-3, num_epochs=256, num_batches=4):
         opt_state = optimizer.init(vdp)
 
         # Run the training loop
-        data = dataloader(u0s, truths, num_epochs=num_epochs, num_batches=num_batches)
-        for idx, (inputs, outputs) in enumerate(data):
+        data = dataloader(data_in, data_out, num_batches=num_batches)
+        for idx, (inputs, outputs) in zip(range(num_epochs), data):
             val, grads = loss(vdp, inputs, outputs)
             updates, opt_state = optimizer.update(grads, opt_state)
             vdp = optax.apply_updates(vdp, updates)
@@ -113,10 +110,12 @@ def generate_data(model_true, *, save_at, key, std):
     return generate
 
 
-def dataloader(inputs, outputs, /, *, num_epochs, num_batches):
+def dataloader(inputs, outputs, /, *, num_batches):
+    assert len(inputs) % num_batches == 0, (len(inputs), num_batches)
+
     idx = jnp.arange(len(inputs))
     key = jax.random.PRNGKey(4123)
-    for _ in range(num_epochs // num_batches):
+    while True:
         key, subkey = jax.random.split(key, num=2)
         idx = jax.random.permutation(subkey, idx)
         for i in idx.reshape((num_batches, -1)):
@@ -124,8 +123,8 @@ def dataloader(inputs, outputs, /, *, num_epochs, num_batches):
 
 
 def log_likelihood(*, save_at, std):
-    def loss(ode, u0s, truths):
-        losses = loss_single(ode, u0s, truths)
+    def loss(ode, data_in, data_out):
+        losses = loss_single(ode, data_in, data_out)
         return jnp.mean(losses)
 
     @functools.partial(jax.vmap, in_axes=(None, 0, 0))
@@ -141,8 +140,9 @@ def log_likelihood(*, save_at, std):
     return loss
 
 
-def solve(ode, u0s, save_at):
-    # any high-accuracy solution works. why? loss-landscape (zoom in!)
+def solve(ode, data_in, save_at):
+    # Any relatively-high-accuracy solution works.
+    # Why? Plot the loss-landscape
     num = 3
     tol = 1e-4
 
@@ -155,7 +155,7 @@ def solve(ode, u0s, save_at):
     # Set up the initial condition
     t0 = save_at[0]
     vf = functools.partial(ode, t=t0)
-    tcoeffs = taylor.odejet_padded_scan(vf, [u0s], num=num)
+    tcoeffs = taylor.odejet_padded_scan(vf, [data_in], num=num)
     output_scale = 1e0  # or any other value with the same shape
     init = solver.initial_condition(tcoeffs, output_scale)
 
