@@ -15,6 +15,7 @@ import optax
 from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.backend import control_flow as cfl
 from probdiffeq.impl import impl
+import matplotlib.pyplot as plt
 
 
 class VanDerPol(eqx.Module):
@@ -39,7 +40,12 @@ class NeuralODE(eqx.Module):
 
     def __init__(self, key):
         self.mlp = eqx.nn.MLP(
-            in_size=2, out_size=1, width_size=32, depth=2, activation=jnp.tanh, key=key
+            in_size=2,
+            out_size=1,
+            width_size=32,
+            depth=2,
+            activation=jnp.tanh,
+            key=key,
         )
 
     def __call__(self, u, *, t):
@@ -57,7 +63,7 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
     key = jax.random.PRNGKey(1)
 
     # Set up the problem
-    t0, t1 = 0.0, 1
+    t0, t1 = 0.0, 6.3  # todo: as large as we can without messing training up
     save_at = jnp.linspace(t0, t1, num=10)
 
     # Sample data
@@ -73,14 +79,15 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
     loss = log_likelihood(save_at=save_at, std=std)
     print(f"True loss: {loss(vdp, data_in, data_out):.2e}")
     loss = eqx.filter_jit(eqx.filter_value_and_grad(loss))
-    optimizer = optax.adam(1e-3)
+    optimizer = optax.adam(1e-2)
 
     # Use Equinox's bounded while loop for reverse-differentiability
     loop = functools.partial(eqx.internal.while_loop, kind="bounded", max_steps=100)
     with cfl.context_overwrite_while_loop(loop):
         # Initialise the optimizer
         key, subkey = jax.random.split(key, num=2)
-        model = NeuralODE(subkey)
+        model_before = NeuralODE(subkey)
+        model = model_before
         opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
 
         # Run the training loop
@@ -92,6 +99,15 @@ def main(num_data=1, std=1e-3, num_epochs=500, num_batches=1):
 
             label = f"{idx}/{num_epochs} | loss: {val:.2e}"
             print(label)
+
+    # Plot before and after
+    before = solve(model_before, data_in[0], save_at=save_at)
+    after = solve(model, data_in[0], save_at=save_at)
+    plt.plot(save_at, before.u, color="C0", label="Before")
+    plt.plot(save_at, after.u, color="C1", label="After")
+    plt.plot(save_at, data_out[0], "x", color="C2", label="Data")
+    plt.legend()
+    plt.show()
 
 
 def generate_data(model_true, *, save_at, key, std):
