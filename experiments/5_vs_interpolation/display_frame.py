@@ -16,3 +16,5 @@ print()
 
 results = pd.DataFrame.from_dict(results_dict)
 print(results.T)
+print()
+print(results.T.to_latex())

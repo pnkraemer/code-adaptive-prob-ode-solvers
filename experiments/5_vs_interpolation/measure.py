@@ -59,7 +59,7 @@ class RunnerCheckpoint:
     def prepare_and_solve(self, *, tol, save_at):
         solve = functools.partial(self._solve, tol=tol, save_at=save_at)
         self.solve = jax.jit(solve)
-        return self.solve()
+        return self.solve(), len(save_at)
 
     def _solve(self, *, tol, save_at):
         asolver = ivpsolve.adaptive(self.solver, atol=tol, rtol=tol, control=self.ctrl)
@@ -73,7 +73,8 @@ class RunnerCheckpoint:
             key, posterior, shape=(self.num_samples,), reverse=True
         )
         qoi = jnp.concatenate([qoi, init[..., None, :]], axis=-2)
-        return IVPSolution(grid=save_at, solution=qoi.mean(axis=0))
+        solution = IVPSolution(grid=save_at, solution=qoi.mean(axis=0))
+        return solution
 
 
 class RunnerTextbook:
@@ -120,7 +121,7 @@ class RunnerTextbook:
 
         solve = functools.partial(self._solve, grid=grid, save_at=save_at)
         self.solve = jax.jit(solve)
-        return self.solve()
+        return self.solve(), adaptive.num_steps
 
     def _solve_adaptive(self, *, tol, t0, t1):
         asolver = ivpsolve.adaptive(self.solver, atol=tol, rtol=tol, control=self.ctrl)
@@ -145,7 +146,8 @@ class RunnerTextbook:
         _, _, indices = jnp.intersect1d(
             save_at, grid, size=len(save_at), return_indices=True
         )
-        return IVPSolution(grid=save_at, solution=qoi[:, indices, :].mean(axis=0))
+        solution = IVPSolution(grid=save_at, solution=qoi[:, indices, :].mean(axis=0))
+        return solution
 
 
 def main():
@@ -163,32 +165,35 @@ def main():
     results = {}
     num_samples = [5, 50, 500]
     i = 1
+    # todo: save number of steps?
     for n in num_samples:
         tols = [10.0 ** (-4.0), 10.0 ** (-7.0), 10.0 ** (-10.0)]
-        for tol in tols:
+        tols_labels = ["$10^{-4}$", "$10^{-7}$", "$10^{-10}$"]
+
+        for tol, tol_label in zip(tols, tols_labels):
             checkpoint = RunnerCheckpoint(
                 *ivp, ode_order=2, num_derivs=4, num_samples=n
             )
             textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=4, num_samples=n)
 
             results[i] = {}
-            results[i]["K"] = n
-            results[i]["tol."] = tol
+            results[i]["No. Samples"] = f"{n}"
+            results[i]["Tolerance"] = tol_label
 
             for alg in [textbook, checkpoint]:
                 save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
-                reference = checkpoint.prepare_and_solve(tol=1e-12, save_at=save_at)
-
-                approximation = alg.prepare_and_solve(tol=tol, save_at=save_at)
+                reference, _ = checkpoint.prepare_and_solve(tol=1e-12, save_at=save_at)
+                approximation, nsteps = alg.prepare_and_solve(tol=tol, save_at=save_at)
                 tm = runtime(alg.solve, num_runs=3)
 
-                accuracy = error(approximation.solution, reference.solution)
+                # accuracy = error(approximation.solution, reference.solution)
 
-                results[i][f"{alg.name} (time)"] = tm
-                results[i][f"{alg.name} (accuracy)"] = accuracy
+                if alg.name == "AS":
+                    results[i]["No. steps"] = f"{int(nsteps):,}"
+                results[i][f"Time (s): {alg.name}"] = f"{tm:.3f}"
 
                 print(
-                    f"alg={alg.name}, K={n}, tol={tol:.0e}, time={tm:.3f}s, acc={accuracy:.2e}"
+                    f"alg={alg.name}, K={n}, tol={tol:.0e}, time={tm:.3f}s, nsteps={int(nsteps):,}"
                 )
             i += 1
 
