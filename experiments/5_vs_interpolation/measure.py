@@ -1,8 +1,3 @@
-# message: whatever happens, we're doing okay even against the cheater.
-# we win if num_samples is large.
-# we lose if it is small.
-# in either case, the difference is less than 2x for reasonable configs.
-
 import functools
 import time
 from typing import Callable, NamedTuple
@@ -13,6 +8,7 @@ from probdiffeq import ivpsolve, ivpsolvers, stats, taylor
 from probdiffeq.impl import impl
 
 from odecheckpts import ivps
+import os
 
 
 class IVPSolution(NamedTuple):
@@ -29,6 +25,8 @@ class IVPSolution(NamedTuple):
 
 
 class RunnerCheckpoint:
+    name = "ATS (ours)"
+
     def __init__(
         self,
         vf,
@@ -79,6 +77,8 @@ class RunnerCheckpoint:
 
 
 class RunnerTextbook:
+    name = "AS"
+
     def __init__(
         self,
         vf,
@@ -158,27 +158,46 @@ def main():
 
     # Set up the solver
     impl.select("isotropic", ode_shape=(2,))
-    # baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=3)
-    # plt.plot(*baseline.solution.T)
-    # plt.show()
+    baseline = solve_baseline(*ivp, tol=1e-7, ode_order=2, num_derivs=3)
 
-    num_samples = 1
-    checkpoint = RunnerCheckpoint(
-        *ivp, ode_order=2, num_derivs=3, num_samples=num_samples
-    )
-    textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=3, num_samples=num_samples)
-
-    save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
-    reference = checkpoint.prepare_and_solve(tol=1e-12, save_at=save_at)
-
-    tols = 10.0 ** (-jnp.arange(2, 12, step=2))
-    for alg in [textbook, checkpoint]:
+    results = {}
+    num_samples = [5, 50, 500]
+    i = 1
+    for n in num_samples:
+        tols = [10.0 ** (-4.0), 10.0 ** (-7.0), 10.0 ** (-10.0)]
         for tol in tols:
-            approximation = alg.prepare_and_solve(tol=tol, save_at=save_at)
-            tm = runtime(alg.solve, num_runs=1)
-            accuracy = error(approximation.solution, reference.solution)
-            print(f"tol={tol:.0e}, time={tm:.3f}s, acc={accuracy:.2e}")
+            checkpoint = RunnerCheckpoint(
+                *ivp, ode_order=2, num_derivs=4, num_samples=n
+            )
+            textbook = RunnerTextbook(*ivp, ode_order=2, num_derivs=4, num_samples=n)
+
+            results[i] = {}
+            results[i]["K"] = n
+            results[i]["tol."] = tol
+
+            for alg in [textbook, checkpoint]:
+                save_at = jnp.linspace(ivp[2][0], ivp[2][-1])
+                reference = checkpoint.prepare_and_solve(tol=1e-12, save_at=save_at)
+
+                approximation = alg.prepare_and_solve(tol=tol, save_at=save_at)
+                tm = runtime(alg.solve, num_runs=3)
+
+                accuracy = error(approximation.solution, reference.solution)
+
+                results[i][f"{alg.name} (time)"] = tm
+                results[i][f"{alg.name} (accuracy)"] = accuracy
+
+                print(
+                    f"alg={alg.name}, K={n}, tol={tol:.0e}, time={tm:.3f}s, acc={accuracy:.2e}"
+                )
+            i += 1
+
         print()
+
+    filename = os.path.dirname(__file__) + "/data"
+    jnp.save(f"{filename}_results.npy", results, allow_pickle=True)
+    jnp.save(f"{filename}_solution.npy", baseline.solution, allow_pickle=True)
+    print(f"Saved to {filename}")
 
 
 def solve_baseline(vf, init, tspan, /, *, tol: float, ode_order: int, num_derivs: int):
