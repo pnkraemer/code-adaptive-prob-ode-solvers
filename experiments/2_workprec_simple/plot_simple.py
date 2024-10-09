@@ -65,7 +65,7 @@ def plot_solution(axis, ts, ys, checkpoints, yscale="linear"):
 
     axis.set_xlim((-0.1, 50.1))
     axis.set_xlabel("Time $t$")
-    axis.set_ylabel("Solution $y$")
+    axis.set_ylabel("Solution")
     axis.set_yscale(yscale)
     return axis
 
