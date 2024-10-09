@@ -105,13 +105,13 @@ def load_meshgrid(string, resolution):
 
 
 def plot_pcolormesh(axis, /, Xs, Ts, Us, *, num_steps):
-    title = "a) Brusselator:"
+    title = "a) Brusselator solution:"
     title += f" ${len(Ts):,}$ target points"
     # title += f", ${int(num_steps):,}$ compute pts."
     axis.set_title(title)
 
     axis.set_xlabel("Space dimension")
-    axis.set_ylabel("Time dimension $t$")
+    axis.set_ylabel("Time dimension")
     axis.tick_params(which="both", direction="out")
     axis.pcolormesh(Xs, Ts, Us)
 
