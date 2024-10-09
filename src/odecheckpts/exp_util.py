@@ -55,6 +55,10 @@ def style_harder():
             string = string.replace(" via probdiffeq", "")
         if "diffrax" in string:
             string = string.replace(" via diffrax", "")
+        if "rob" in string:
+            string = string.replace(")", "; ours)")
+        else:
+            string = f"RK: {string}"
         return string
 
     def marker(string, /):
@@ -76,7 +80,7 @@ def style_harder():
         if "prob" in string.lower():
             return "C0"
         if "diffrax" in string.lower():
-            return "C1"
+            return "C2"
 
         raise ValueError(string)
 
@@ -111,9 +115,9 @@ def style_simple():
         raise ValueError(string)
 
     def color(string, /):
-        if "step" in string.lower():
-            return "C0"
         if "loop" in string.lower():
+            return "C0"
+        if "step" in string.lower():
             return "C1"
         if "diffrax" in string.lower():
             return "C2"
@@ -131,17 +135,21 @@ def style_simple():
         raise ValueError(string)
 
     def label(string, /):
+        print(string)
         if "()" in string:
             string = string.replace("()", "")
         if "probdiffeq" in string:
             string = string.replace("via probdiffeq", "")
         if "diffrax" in string:
             string = string.replace("via diffrax", "")
+            string = f"RK: {string}"
         if "TS" in string:
             string = string.replace("TS0", "Prob")
         if "can't" in string:
             string = string.replace("can't", "no")
-        return string.capitalize()
+        if "loop" in string:
+            string = string.replace("loop)", "loop; ours)")
+        return string
 
     def linestyle(string, /):
         if "2" in string.lower():

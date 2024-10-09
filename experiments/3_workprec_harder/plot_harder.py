@@ -12,15 +12,17 @@ STYLE = exp_util.style_harder()
 
 def main():
     plt.rcParams.update(PLOT_PARAMS)
-    fig, axes = plt.subplots(figsize=(3.25, 2.0), dpi=150)
+
+    layout = [["workprec", "solution"]]
+    fig, axes = plt.subplot_mosaic(layout, figsize=(6.75, 2.0), dpi=150)
 
     results = load_results()
     _ts, ys = load_solution()
 
-    _ = plot_results(axes, results)
+    _ = plot_results(axes["workprec"], results)
 
-    axes_in = axes.inset_axes([0.75, 0.65, 0.25, 0.35])
-    _ = plot_solution(axes_in, ys)
+    # axes_in = axes.inset_axes([0.75, 0.65, 0.25, 0.35])
+    _ = plot_solution(axes["solution"], ys)
 
     plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
@@ -58,30 +60,29 @@ def plot_results(axis, results):
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid()
-    axis.set_ylim((3e-4, 1e0))
+    axis.set_yticks((1e-4, 1e-3, 1e-2, 1e-1, 1e0))
     axis.legend(ncols=2, loc="lower left", fontsize="x-small")
     return axis
 
 
 def plot_solution(axis, ys):
-    axis.set_title("b) Pleiades sol.", fontsize="x-small", x=0.5, y=0.65)
+    axis.set_title("b) Pleiades solution (seven states)")
 
     for i in range(7):
-        axis.plot(ys[:, i], ys[:, 7 + i], color="black")
-        axis.plot(ys[[0], i], ys[[0], 7 + i], marker=".", markersize=1, color="black")
+        axis.plot(ys[:, i], ys[:, 7 + i], color=f"C{i}")
+        axis.plot(ys[[0], i], ys[[0], 7 + i], marker=".", color=f"C{i}")
         axis.plot(
             ys[[-1], i],
             ys[[-1], 7 + i],
             marker="*",
-            color="black",
-            markersize=3,
+            color=f"C{i}",
         )
-    axis.set_xlim((-4, 4))
-    axis.set_ylim((-7, 12))
-    axis.set_xticks(())
-    axis.set_yticks(())
-    # axis.set_xlabel("$x$-coordinate")
-    # axis.set_ylabel("$y$-coordinate")
+    # axis.set_xlim((-4, 4))
+    # axis.set_ylim((-7, 12))
+    # axis.set_xticks(())
+    # axis.set_yticks(())
+    axis.set_xlabel("$x$-coordinate")
+    axis.set_ylabel("$y$-coordinate")
     return axis
 
 

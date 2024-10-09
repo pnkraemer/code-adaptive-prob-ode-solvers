@@ -24,12 +24,15 @@ def main():
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
     ]
-    fig, axes = plt.subplot_mosaic(layout, figsize=(6.75, 4.0), dpi=100)
+    fig, axes = plt.subplot_mosaic(layout, figsize=(6.75, 4.0), dpi=200)
 
     # Plot each set of results
+    _ = plot_solution(axes["solution"], ts, ys, checkpoints)
     _ = plot_results(axes["benchmark"], results)
     _ = plot_results_error_vs_length(axes["error_vs_length"], results)
-    _ = plot_solution(axes["solution"], ts, ys, checkpoints)
+
+    for axis in [axes["benchmark"], axes["error_vs_length"]]:
+        axis.set_xticks([1e-0, 1e-2, 1e-4, 1e-6, 1e-8])
 
     plt.savefig(f"./figures/{os.path.basename(os.path.dirname(__file__))}.pdf")
     plt.show()
@@ -50,6 +53,21 @@ def load_solution():
 
 def load_checkpoints():
     return jnp.load(os.path.dirname(__file__) + "/data_checkpoints.npy")
+
+
+def plot_solution(axis, ts, ys, checkpoints, yscale="linear"):
+    axis.set_title("a) Rigid body problem: three-dimensional solution")
+    for linestyle, y in zip(["solid", "dashed", "dotted"], ys.T):
+        axis.plot(ts, y, linestyle=linestyle, color="black")
+
+    # for t in checkpoints:
+    #     axis.axvline(t, linestyle="dotted", color="black")
+
+    axis.set_xlim((-0.1, 50.1))
+    axis.set_xlabel("Time $t$")
+    axis.set_ylabel("Solution $y$")
+    axis.set_yscale(yscale)
+    return axis
 
 
 def plot_results(axis, results):
@@ -73,7 +91,7 @@ def plot_results(axis, results):
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Wall time (s)")
     axis.grid()
-    axis.legend(loc="lower center", ncols=3)
+    axis.legend(loc="lower center", ncols=3, fontsize="x-small")
     return axis
 
 
@@ -95,27 +113,12 @@ def plot_results_error_vs_length(axis, results):
                 zorder=STYLE.zorder(label),
             )
 
-    axis.set_ylim((0.5, 1e4))
-    axis.legend(ncols=1)
+    axis.set_yticks((1e0, 1e1, 1e2, 1e3, 1e4))
+    axis.legend(ncols=1, fontsize="x-small")
 
     axis.set_xlabel("Time-series error (RMSE)")
     axis.set_ylabel("Length of the solution vector")
     axis.grid()
-    return axis
-
-
-def plot_solution(axis, ts, ys, checkpoints, yscale="linear"):
-    axis.set_title("a) Rigid body problem")
-    for linestyle, y in zip(["solid", "dashed", "dotted"], ys.T):
-        axis.plot(ts, y, linestyle=linestyle, color="black")
-
-    for t in checkpoints:
-        axis.axvline(t, linestyle="dotted", color="black")
-
-    axis.set_xlim((jnp.amin(ts) - 0.5, jnp.amax(ts) + 0.5))
-    axis.set_xlabel("Time $t$")
-    axis.set_ylabel("Solution $y$")
-    axis.set_yscale(yscale)
     return axis
 
 
