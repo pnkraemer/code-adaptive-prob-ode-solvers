@@ -13,6 +13,8 @@ This repository contains the experiments for:
 }
 ```
 
+[Here](https://arxiv.org/abs/2410.10530) is a link to the preprint.
+
 ## Warning
 This repository contains only experiment code.
 We have made the new algorithm a part of probdiffeq ([link](https://pnkraemer.github.io/probdiffeq/)), which can be installed via
