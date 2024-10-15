@@ -5,7 +5,7 @@ This repository contains the experiments for:
 ```bibtex
 @article{krämer2024adaptive,
     title={Adaptive Probabilistic {ODE} Solvers Without Adaptive Memory Requirements},
-    author={Nicholas Krämer},
+    author={Kr{\"a}mer, Nicholas},
     year={2024},
     eprint={2410.10530},
     archivePrefix={arXiv},
