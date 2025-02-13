@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 from odecheckpts import exp_util
+from tueplots import bundles
 
 PLOT_PARAMS = exp_util.plot_params()
 STYLE = exp_util.style_simple()
@@ -11,6 +12,7 @@ STYLE = exp_util.style_simple()
 
 def main():
     """Load and plot the results."""
+    plt.rcParams.update(bundles.probnum2025(column="full"))
     plt.rcParams.update(PLOT_PARAMS)
 
     results = load_results()
@@ -24,7 +26,7 @@ def main():
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
         ["benchmark", "benchmark", "benchmark", "error_vs_length", "error_vs_length"],
     ]
-    fig, axes = plt.subplot_mosaic(layout, figsize=(6.75, 4.0), dpi=200)
+    fig, axes = plt.subplot_mosaic(layout, dpi=200)
 
     # Plot each set of results
     _ = plot_solution(axes["solution"], ts, ys, checkpoints)

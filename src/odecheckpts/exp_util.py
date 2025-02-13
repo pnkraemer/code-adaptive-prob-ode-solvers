@@ -6,18 +6,14 @@ from tueplots import axes
 
 
 def plot_params():
-    fontsize = fontsize_uniform(9)
-    axes_lines = axes.lines(base_width=0.35)
+    axes_lines = axes.lines()
     axes_legend = axes.legend()
     axes_grid = axes.grid()
     axes_ticks = axes.tick_direction(x="in", y="in")
     return {
         "markers.fillstyle": "none",
-        "text.usetex": True,
-        "text.latex.preamble": r"\usepackage{cmbright}",
         "figure.constrained_layout.use": True,
         "lines.markeredgewidth": 0.5,
-        **fontsize,
         **axes_lines,
         **axes_legend,
         **axes_grid,

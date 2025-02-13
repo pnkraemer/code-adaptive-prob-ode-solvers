@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 from odecheckpts import exp_util
+from tueplots import bundles
 
 
 @dataclasses.dataclass
@@ -113,10 +114,11 @@ def plot_pcolormesh(axis, /, Xs, Ts, Us, *, num_steps):
     axis.set_xlabel("Space dimension")
     axis.set_ylabel("Time dimension")
     axis.tick_params(which="both", direction="out")
-    axis.pcolormesh(Xs, Ts, Us)
+    axis.pcolormesh(Xs, Ts, Us, edgecolor="face")
 
 
 def main():
+    plt.rcParams.update(bundles.probnum2025(column="full"))
     plt.rcParams.update(exp_util.plot_params())
     checkpoint = Data.load("data_checkpoint", skip=1)
     textbook = Data.load("data_textbook", skip=1)

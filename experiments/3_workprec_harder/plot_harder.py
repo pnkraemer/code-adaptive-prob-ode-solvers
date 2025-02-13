@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 from odecheckpts import exp_util
+from tueplots import bundles
 
 TODO = "\nTODO: Rename all saved data into data_* so the directory is clean.\n"
 PLOT_PARAMS = exp_util.plot_params()
@@ -11,6 +12,7 @@ STYLE = exp_util.style_harder()
 
 
 def main():
+    plt.rcParams.update(bundles.probnum2025(column="full"))
     plt.rcParams.update(PLOT_PARAMS)
 
     layout = [["workprec", "solution"]]

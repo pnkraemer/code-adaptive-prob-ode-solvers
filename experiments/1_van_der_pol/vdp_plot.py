@@ -6,10 +6,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 from odecheckpts import exp_util
-
-raise RuntimeError(
-    "in the data generation, prefix the data files with data_* instead of vdp_*"
-)
+from tueplots import bundles
 
 
 @dataclasses.dataclass
@@ -46,8 +43,9 @@ def main():
     fixed_inaccurate = Data.load(filename, "fixed_inaccurate")
 
     # Make all plots look similar
+    plt.rcParams.update(bundles.probnum2025())
     plt.rcParams.update(exp_util.plot_params())
-    fig, ax = plt.subplots(dpi=100, figsize=(3.25, 2.0))  # 3.25: half-page
+    fig, ax = plt.subplots(dpi=150)  # 3.25: half-page
 
     # Plot the three curves
     label = f"$N={adaptive.num_steps:,}$ adaptive steps take {adaptive.runtime:.2f}s"
