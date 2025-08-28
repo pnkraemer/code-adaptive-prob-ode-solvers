@@ -3,17 +3,21 @@
 This repository contains the experiments for:
 
 ```bibtex
-@article{krämer2024adaptive,
-    title={Adaptive Probabilistic {ODE} Solvers Without Adaptive Memory Requirements},
-    author={Kr{\"a}mer, Nicholas},
-    year={2024},
-    eprint={2410.10530},
-    archivePrefix={arXiv},
-    url={https://arxiv.org/abs/2410.10530},
+@InProceedings{kramer2024adaptive,
+  title     = {Adaptive Probabilistic ODE Solvers Without Adaptive Memory Requirements},
+  author    = {Kr\"{a}mer, Nicholas},
+  booktitle = {Proceedings of the First International Conference on Probabilistic Numerics},
+  pages     = {12--24},
+  year      = {2025},
+  editor    = {Kanagawa, Motonobu and Cockayne, Jon and Gessner, Alexandra and Hennig, Philipp},
+  volume    = {271},
+  series    = {Proceedings of Machine Learning Research},
+  publisher = {PMLR},
+  url       = {https://proceedings.mlr.press/v271/kramer25a.html}
 }
 ```
 
-[Here](https://arxiv.org/abs/2410.10530) is a link to the preprint.
+[Here](https://arxiv.org/abs/2410.10530) is a link to the arXiv.
 
 ## Warning
 This repository contains only experiment code.
